@@ -10,7 +10,9 @@
 
 ## Description du Projet
 
-Sécurisez une flotte de véhicules terrestres en analysant les signaux échangés sur le bus CAN. Un attaquant pouvant injecter ou modifier des messages peut altérer le comportement du véhicule (freinage, direction...). Le défi : concevoir un système de détection d'anomalies plus fiable, capable de distinguer les cyberattaques réelles des faux positifs, malgré le volume massif de données (centaines de milliers de signaux/minute).
+- Aidez une équipe en cybersécurité à sécuriser une flotte de véhicules terrestres en étudiant les signaux échangés entre les capteurs et les actuateurs via le bus de données CAN (Controller Area Network). L’objectif est d’assurer la sécurité globale du véhicule, et par extension, celle de ses occupants.
+- Les véhicules modernes intègrent de plus en plus d’unités électroniques embarquées, comme des capteurs et des actuateurs, qui doivent échanger en permanence des données critiques pour le fonctionnement du véhicule. Ces échanges sont assurés par le bus CAN, un protocole de communication standardisé dans l’industrie automobile. Malheureusement, un attaquant qui parvient à accéder au réseau CAN d’un véhicule peut potentiellement injecter, modifier ou supprimer des messages, et ainsi altérer le comportement du véhicule — freinage, direction, affichages, etc.
+- Les modèles les plus récents peuvent atteindre des taux d’erreur inférieurs à 1%, ce qui semble très performant. Mais ce faible taux est trompeur lorsqu'on considère la quantité massive de signaux échangés — souvent plusieurs centaines de milliers par minute. Un taux d’erreur de 1% dans ce contexte peut générer des milliers de faux positifs par minute, rendant la détection peu exploitable en pratique. L’objectif est de concevoir des approches de détection plus fiables et contextuellement pertinentes, capables de distinguer des anomalies réellement critiques tout en réduisant drastiquement le taux de faux positifs.
 
 ## Objectifs & Livrables
 
