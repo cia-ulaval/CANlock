@@ -1,4 +1,4 @@
-# CANlock 🔒
+# Thales 🔒
 
 ## Fiche d'Identité
 
