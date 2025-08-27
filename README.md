@@ -16,7 +16,7 @@
 
 ## Objectifs & Livrables
 
-*   **Objectif Principal :** Obtenir un modèle/algorithmede détection d'anomalies plus performant pour réduire drastiquement les faux positifs sur le bus CAN.
+*   **Objectif Principal :** Obtenir un modèle/algorithme de détection d'anomalies plus performant pour réduire drastiquement les faux positifs sur le bus CAN.
 *   **Livrables attendus :**
     *   Pipeline(s) de traitement des données et modèle(s) testé(s).
     *   Rapport technique de mi-session et de fin de session.
@@ -48,5 +48,4 @@ Tu vas aimer ce projet si :
 *   Tu veux acquérir une expérience précieuse et concrète qui impressionnera sur ton CV.
 
 ## Contact & Liens Utiles
-*   **Contact :** [Email de Loïc Baret]
-*   **Lien :** [Lien vers documentation Thales ou projet passé - optionnel]
+*   **Contact :** [Thales](https://www.thalesgroup.com/en)
