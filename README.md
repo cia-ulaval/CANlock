@@ -50,13 +50,17 @@ Tu vas aimer ce projet si :
 ## Contact & Liens Utiles
 *   **Contact :** [Thales](https://www.thalesgroup.com/en)
 
+## Ressources
+
+Tu retrouveras les articles séléctionnés dans la revue de littérature faite par la stagiaire Thales dans le fichier [`doc/litterature.md`](./doc/litterature.md).
+
 ## Outils
 
 Pour l'utilisation des outils, veuillez vous référer à la documentation en place suivante:
 
 ### VS Code
 
-Il est vivement conseillé d'utiliser l'IDE de Microsoft Visual Studio Code (ou VS Code) pour ce projet. Il est simple d'utilisation, léger et avec les bonnes extensions, il te permet de faire ce que tu veux au niveau du code (Python ou autre). De plus, il va t'éviter beaucoup de problèmes au niveau de l'environnement, puisque Microsoft t'offre la possibilité d'utiliser des [.devcontainer](#devcontainer), qui est tout simplement un conteneur Docker pour développer votre code.
+Il est vivement conseillé d'utiliser l'IDE de Microsoft Visual Studio Code (ou VS Code) pour ce projet. Il est simple d'utilisation, léger et avec les bonnes extensions, il te permet de faire ce que tu veux au niveau du code (Python ou autre). De plus, il va t'éviter beaucoup de problèmes au niveau de l'environnement, puisque Microsoft t'offre la possibilité d'utiliser des devcontainers, qui est tout simplement un conteneur Docker pour développer votre code.
 
 [Lien vers les détails sur VS Code](./doc/vscode.md)
 
