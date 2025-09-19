@@ -1,0 +1,19 @@
+[project]
+name = "canlock"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10.18"
+dependencies = [
+    "click>=8.3.0",
+]
+
+[project.scripts]
+canlock = "canlock.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/canlock"]
