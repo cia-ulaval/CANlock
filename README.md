@@ -49,3 +49,29 @@ Tu vas aimer ce projet si :
 
 ## Contact & Liens Utiles
 *   **Contact :** [Thales](https://www.thalesgroup.com/en)
+
+## Outils
+
+Pour l'utilisation des outils, veuillez vous référer à la documentation en place suivante:
+
+### VS Code
+
+Il est vivement conseillé d'utiliser l'IDE de Microsoft Visual Studio Code (ou VS Code) pour ce projet. Il est simple d'utilisation, léger et avec les bonnes extensions, il te permet de faire ce que tu veux au niveau du code (Python ou autre). De plus, il va t'éviter beaucoup de problèmes au niveau de l'environnement, puisque Microsoft t'offre la possibilité d'utiliser des [.devcontainer](#devcontainer), qui est tout simplement un conteneur Docker pour développer votre code.
+
+[Lien vers les détails sur VS Code](./doc/vscode.md)
+
+### Git
+
+Un incontournable du développement ! Impossible de faire de la programmation sans connaitre, ni utiliser `git`. Il te permettra de versionner ton code et de revenir en arrière si jamais quelque chose tourne mal, et il te permettra également de développer des nouvelles *features* sans casser tout le code déjà en place!
+
+Aller, [clique sur ce lien si tu veux en savoir plus sur comment nous allons fonctionner avec git](./doc/git.md)
+
+### UV
+
+C'est un outil magique, un tout-en-un nécessaire en python. Une fois que tu auras testé cet outil, impossible pour toi de simplement utiliser `pip` !
+
+Alors [clique sur ce lien qui te dirige droit aux explications !](./doc/uv.md)
+
+### Hydra & mlflow
+
+Nous verrons ces outils un peu plus tard au courant du projet, car pour l'instant ne t'embrouilles pas à apprendre d'un coup trop d'outils !
