@@ -63,8 +63,23 @@ En attendant la confirmation pour l'accès aux données Thales, tu peux téléch
 Pour que tout le monde ait la même structure et donc que le code reste générique et utilisable pour tous, tu peux utiliser cette commande pour télécharger et extraire les données:
 
 ```sh
-uv run download-heavy-truck-data
+uv run download-heavy-truck-data -u <URL de téléchargement>
 ```
+
+**URL de téléchargement**
+
+:warning: Il faut que tu fournisses ton URL de téléchargement car l'URL possède un token qui est utilisable uniquement une fois.
+
+Pour se faire:
+
+1. Rends toi sur le site (https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data)[https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data]
+2. Clique sur les trois points verticaux à côté du bouton `Download all`
+
+![trois boutons verticaux](./doc/images/trois-points-telechargement.png)
+
+3. Copie/colle le lien sous la section `URL` après l'argument `-u` de la commande:
+
+![download url](./doc/images/download-url.png)
 
 
 ## Outils
