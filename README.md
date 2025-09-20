@@ -76,6 +76,14 @@ C'est un outil magique, un tout-en-un nécessaire en python. Une fois que tu aur
 
 Alors [clique sur ce lien qui te dirige droit aux explications !](./doc/uv.md)
 
+### click
+
+Pour créer vos scripts python, il t'est conseillé d'utiliser la librairie `click`. Elle reprend `argparse`, en plus intuitif et simple à utiliser. Elle exploite les décorateurs pour créer une commande.
+
+Il y a un court exemple avec le script [`src/canlock/cli.py`](./src/canlock/cli.py).
+
+Tu peux te renseigner directement avec la [documentation qui est très bien rédigée](https://click.palletsprojects.com/en/stable/quickstart/).
+
 ### Hydra & mlflow
 
 Nous verrons ces outils un peu plus tard au courant du projet, car pour l'instant ne t'embrouilles pas à apprendre d'un coup trop d'outils !
