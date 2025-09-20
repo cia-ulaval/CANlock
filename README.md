@@ -52,7 +52,20 @@ Tu vas aimer ce projet si :
 
 ## Ressources
 
+### Revue de littérature
+
 Tu retrouveras les articles séléctionnés dans la revue de littérature faite par la stagiaire Thales dans le fichier [`doc/litterature.md`](./doc/litterature.md).
+
+### Données
+
+En attendant la confirmation pour l'accès aux données Thales, tu peux télécharger les données [`Heavy Truck`](https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e) basés sur le même protocole bus CAN J1939 pour te faire une idée des données qui vont être utilisés durant le projet.
+
+Pour que tout le monde ait la même structure et donc que le code reste générique et utilisable pour tous, tu peux utiliser cette commande pour télécharger et extraire les données:
+
+```sh
+uv run download-heavy-truck-data
+```
+
 
 ## Outils
 
