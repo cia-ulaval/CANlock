@@ -72,7 +72,7 @@ uv run download-heavy-truck-data -u <URL de téléchargement>
 
 Pour se faire:
 
-1. Rends toi sur le site (https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data)[https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data]
+1. Rends toi sur le site [https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data](https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e/data)
 2. Clique sur les trois points verticaux à côté du bouton `Download all`
 
 ![trois boutons verticaux](./doc/images/trois-points-telechargement.png)
