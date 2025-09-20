@@ -12,3 +12,6 @@ wheels/
 # Git
 data/*
 !data/.gitkeep
+
+# Logs
+*.log

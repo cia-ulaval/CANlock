@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.10.18"
 dependencies = [
     "click>=8.3.0",
+    "requests>=2.32.5",
 ]
 
 [project.scripts]
 canlock = "canlock.cli:main"
+download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
 
 [build-system]
 requires = ["hatchling"]
