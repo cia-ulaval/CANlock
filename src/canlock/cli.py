@@ -46,5 +46,9 @@ def download_heavy_truck_data(url: str, data_folder: Path) -> None:
     heavy_truck_data_run(url, data_folder)
 
 
+@click.command(
+    
+)
+
 if __name__ == "__main__":
     main()
