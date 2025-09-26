@@ -18,6 +18,7 @@ dependencies = [
 [project.scripts]
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
+preprocess-heavy-truck-data = "canlock.cli:preprocess_heavy_truck_data"
 
 [build-system]
 requires = ["hatchling"]
