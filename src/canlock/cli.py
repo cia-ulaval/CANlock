@@ -5,6 +5,7 @@ import click
 from click import Path as ClickPath
 
 from canlock.data.download_heavy_duty_truck_data import run as heavy_truck_data_run
+from canlock.data.csv_transform_data import transform_all_csv_files_multiprocessing_with_progress
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,10 +46,46 @@ def download_heavy_truck_data(url: str, data_folder: Path) -> None:
         )
     heavy_truck_data_run(url, data_folder)
 
-
-@click.command(
-    
+@click.command()
+@click.option(
+    "-d",
+    "--data-folder",
+    type=ClickPath(dir_okay=True, file_okay=False, path_type=Path),
+    default="data/heavy_truck_data/",
+    required=False,
+    help="Folder to fetch data",
 )
+@click.option(
+    "-o",
+    "--output-folder",
+    type=ClickPath(dir_okay=True, file_okay=False, path_type=Path),
+    default="data/heavy_truck_data_transformed/",
+    required=False,
+    help="Folder to save data in",
+)
+@click.option(
+    "-p",
+    "--num-processes",
+    type=int,
+    default=1,
+    required=False,
+    help="Number of processes",
+)
+@click.option(
+    "-b",
+    "--batch-size",
+    type=int,
+    default=100,
+    required=False,
+    help="Batch size",
+)
+def preprocess_heavy_truck_data(data_folder: Path, output_folder: Path, num_processes: int, batch_size: int) -> None:
+    transform_all_csv_files_multiprocessing_with_progress(
+        data_directory=data_folder, 
+        output_directory=output_folder,
+        num_processes=num_processes,
+        batch_size=batch_size,
+    )
 
 if __name__ == "__main__":
     main()
