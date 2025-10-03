@@ -1,0 +1,15 @@
+services:
+    postgres-backend:
+        image: postgres:17-bullseye
+        restart: no
+        volumes:
+        - postgres-j1939-dataset:/var/lib/postgresql/data
+        environment:
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_USER: postgres
+            POSTGRES_DB: postgres
+        ports:
+            - "5435:5432"
+
+volumes:
+  postgres-j1939-dataset:

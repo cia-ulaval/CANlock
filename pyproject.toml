@@ -3,25 +3,41 @@ name = "canlock"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10.18"
+requires-python = ">=3.11"
 dependencies = [
+    "cantools>=40.7.1",
     "click>=8.3.0",
     "dask[complete]>=2025.9.1",
+    "fastapi[standard]>=0.118.0",
+    "influxdb3-python>=0.16.0",
     "ipykernel>=6.30.1",
     "ipywidgets>=8.1.7",
+    "numba>=0.62.1",
+    "orjson>=3.11.3",
     "pandas>=2.3.2",
+    "pandas-stubs>=2.3.2.250926",
     "plotly>=6.3.0",
+    "psycopg2>=2.9.10",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.11.0",
+    "pytz>=2025.2",
+    "pyzmq>=27.1.0",
     "requests>=2.32.5",
+    "scalar-fastapi>=1.4.3",
+    "sqlmodel>=0.0.25",
     "tqdm>=4.67.1",
+    "uuid>=1.30",
+    "zeroconf>=0.147.2",
 ]
 
 [project.scripts]
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
+import-database = "dataset_export.__main__:run"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/canlock"]
+include = ["src/canlock", "src/dataset_export"]
