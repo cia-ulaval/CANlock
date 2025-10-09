@@ -6,6 +6,10 @@ dist/
 wheels/
 *.egg-info
 
+# Specific Thales
+src/dataset_export/
+DA.xlsx
+
 # Virtual environments
 .venv
 
