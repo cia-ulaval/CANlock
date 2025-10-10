@@ -11,7 +11,11 @@ dependencies = [
     "ipywidgets>=8.1.7",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
+    "psycopg2>=2.9.10",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.11.0",
     "requests>=2.32.5",
+    "sqlmodel>=0.0.27",
     "tqdm>=4.67.1",
 ]
 
