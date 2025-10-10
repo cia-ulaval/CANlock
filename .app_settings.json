@@ -1,0 +1,6 @@
+{
+    "folders": [
+        "./data/heavy_truck_data/part_1/part_1", "./data/heavy_truck_data/part_2/part_2", "./data/heavy_truck_data/part_3/part_3", "./data/heavy_truck_data/part_4/part_4"
+    ],
+    "log_level": "DEBUG"
+}
