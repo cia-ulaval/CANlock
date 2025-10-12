@@ -58,6 +58,38 @@ Tu retrouveras les articles séléctionnés dans la revue de littérature faite 
 
 ### Données
 
+#### Chercher la dump de la base de données
+
+Pour obtenir la dump de la base de données, il faut contacter Loïc Baret sur discord et lui transmettre ton adresse email. Ensuite il t'enverra un lien pour te créer un compte sur le site d'un outil de Thales et tu pourras télécharger la dump de la base de données depuis le bon *workspace*.
+
+Une fois que tu as téléchargé la dump, tu peux utiliser l'extension VS Code `Database Client` par l'éditeur `Database Client` pour connecter et importer la dump dans la base de données PostgreSQL.
+
+Les étapes à suivre une fois l'extension installée:
+
+1. Clique sur l'icône de l'extension `Database Client` dans la barre latérale gauche de VS Code.
+
+![database client icon](./doc/images/database-client-icon.png)
+
+2. Clique sur le bouton `Add Connection` (le signe + en haut à droit de la bande `DATABASE`).
+
+![add connection](./doc/images/database-client-add-connection-button.png)
+
+3. Saisie les informations suivantes:
+
+![informations de connexion](./doc/images/database-client-new-connection-informations.png)
+
+4. Clique sur le bouton `+ Connect`.
+
+5. Déplie le menu de la connexion que tu viens de créer et clique droit sur `postgres` puis sur `Import SQL`.
+
+![import sql](./doc/images/database-client-import-sql.png)
+
+6. Sélectionne le fichier `.sql` que tu as téléchargé depuis le site de Thales.
+
+
+**Attention:** Le script d'importation peut prendre un certain temps en fonction de la puissance de ta machine. Attends que le processus se termine avant de faire quoi que ce soit d'autre, sinon tu risques d'avoir des erreurs. Tu sauras que le processus est terminé lorsque tu verras le pannonceau de chargement en bas à droite de ta fenêtre VS Code disparaitre et laisser place à un message de réussite d'importation.
+
+#### Ancienne méthode de téléchargement des données
 En attendant la confirmation pour l'accès aux données Thales, tu peux télécharger les données [`Heavy Truck`](https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e) basés sur le même protocole bus CAN J1939 pour te faire une idée des données qui vont être utilisés durant le projet.
 
 Pour que tout le monde ait la même structure et donc que le code reste générique et utilisable pour tous, tu peux utiliser cette commande pour télécharger et extraire les données:
