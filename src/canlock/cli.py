@@ -46,5 +46,32 @@ def download_heavy_truck_data(url: str, data_folder: Path) -> None:
     heavy_truck_data_run(url, data_folder)
 
 
+@click.command()
+@click.option("--session-id", type=str, required=True, help="Session ID to analyze")
+def analyze_session(session_id: str) -> None:
+    from uuid import UUID
+
+    from canlock.db.database import get_session
+    from canlock.decoder import SessionDecoder
+
+    try:
+        sess_uuid = UUID(session_id)
+    except ValueError:
+        click.echo("Invalid UUID format.")
+        return
+
+    with get_session() as session:
+        decoder = SessionDecoder(session)
+        df = decoder.decode(sess_uuid)
+        
+        if df.empty:
+            click.echo("No data decoded for this session.")
+        else:
+            click.echo(f"Decoded {len(df)} rows.")
+            click.echo(df.head())
+
+
+
 if __name__ == "__main__":
     main()
+

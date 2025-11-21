@@ -22,6 +22,8 @@ dependencies = [
 [project.scripts]
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
+analyze-session = "canlock.cli:analyze_session"
+
 
 [build-system]
 requires = ["hatchling"]
