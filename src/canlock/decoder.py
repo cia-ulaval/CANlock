@@ -9,6 +9,7 @@ from canlock.db.database import get_session, init_db
 from canlock.db.models import (
     AnalogAttributes,
     CanMessage,
+    DefinedDigitalValues,
     PgnDefinition,
     Session,
     SpnDefinition,
@@ -33,15 +34,19 @@ class SessionDecoder:
         self.db = db
 
     @staticmethod
-    def list_sessions():
+    def list_sessions(print_all: bool = False) -> list[Session]:
         """
         List the first 5 sessions in the database.
         """
         init_db()
         with get_session() as session:
-            sessions = session.exec(select(Session).limit(5)).all()
-            for s in sessions:
-                print(f"Session ID: {s.id}, Start: {s.start_time}")
+            sessions = session.exec(select(Session)).all()
+
+            if print_all:
+                for s in sessions:
+                    print(f"Session ID: {s.id}, Start: {s.start_time}, End: {s.end_time}")
+        
+        return sessions
 
     @staticmethod
     def extract_pgn_number_from_payload(identifier: int) -> int:
@@ -79,8 +84,7 @@ class SessionDecoder:
         
         return int(binary_payload[bit_start:bit_start+bit_length], 2)
 
-    @staticmethod
-    def extract_values_from_spns(spn_list: list[SpnDefinition], analogic_rules: list[AnalogAttributes], payload: bytes) -> dict[str, float]:
+    def extract_values_from_spns(self, spn_list: list[SpnDefinition], analogic_rules: list[AnalogAttributes], payload: bytes) -> dict[str, float | str]:
         """
         Extract and scale values for a list of SPNs from the payload.
 
@@ -90,17 +94,43 @@ class SessionDecoder:
             payload (bytes): The raw CAN message payload.
 
         Returns:
-            dict[str, float]: A dictionary mapping SPN names to their scaled values.
+            dict[str, float | str]: A dictionary mapping SPN names to their scaled or decoded values.
         """
         spn_values = {}
         for spn, analog_attr in zip(spn_list, analogic_rules):
-            if analog_attr is None:
-                continue
-            spn_pre_val = SessionDecoder.extract_spn_bits_from_payload(spn, payload)
-            spn_val = analog_attr.scale * spn_pre_val + analog_attr.offset
+            spn_pre_val = self.extract_spn_bits_from_payload(spn, payload)
             
-            spn_values[spn.name] = spn_val
+            if spn.is_analog:
+                if analog_attr is None:
+                    continue
+                spn_val = analog_attr.scale * spn_pre_val + analog_attr.offset
+                spn_values[spn.name] = spn_val
+            else:
+                spn_val = self.decode_digital_value(spn.id, spn_pre_val)
+                if spn_val is not None:
+                    spn_values[spn.name] = spn_val
         return spn_values
+
+    def decode_digital_value(self, spn_id: UUID, raw_value: int) -> str | None:
+        """
+        Decode a digital value to its categorical description.
+
+        Args:
+            spn_id (UUID): The ID of the SPN.
+            raw_value (int): The raw integer value extracted from the payload.
+
+        Returns:
+            str | None: The categorical description if found, otherwise None.
+        """
+        query = select(DefinedDigitalValues).where(
+            DefinedDigitalValues.spn_id == spn_id,
+            DefinedDigitalValues.value == raw_value
+        )
+        result = self.db.exec(query).first()
+        
+        if result:
+            return result.name
+        return None
 
     def decode(self, session_id: UUID) -> pd.DataFrame:
         """
