@@ -142,7 +142,6 @@ class SessionDecoder:
         Returns:
             pd.DataFrame: A DataFrame containing the decoded data, with timestamps and SPN values.
         """
-        # Fetch messages
         can_messages = self.db.exec(
             select(CanMessage)
             .where(CanMessage.session_id == session_id)
@@ -150,10 +149,7 @@ class SessionDecoder:
         ).all()
 
         decoded_data = []
-        
-        # Cache PGN definitions
         pgn_cache = {}
-
         for message in tqdm(can_messages, desc="Decoding messages"):
             if message.can_identifier is None or message.payload is None:
                 continue
