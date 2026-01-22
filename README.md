@@ -42,7 +42,7 @@
 
 La première session nous a permis de nous familiariser avec le projet et de comprendre le contexte. Nous avons mis en place un pipeline de traitement des données et avons testé plusieurs approches d'analyse. Tout ce qui a été fait est disponible dans le dossier `doc/documents`.
 
-Le premier rapport est disponible [ici](./doc/documents/Projet%20CANlock%20-%20Gala.pdf).
+Le premier rapport est disponible [ici](./doc/documents/Projet CANLock - Gala.pdf).
 
 ## Timeline Prévisionnelle de la Session
 
