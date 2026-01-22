@@ -9,6 +9,7 @@ dependencies = [
     "dask[complete]>=2025.9.1",
     "ipykernel>=6.30.1",
     "ipywidgets>=8.1.7",
+    "nbformat>=5.10.4",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
     "psycopg2>=2.9.10",
@@ -22,6 +23,8 @@ dependencies = [
 [project.scripts]
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
+analyze-session = "canlock.cli:analyze_session"
+
 
 [build-system]
 requires = ["hatchling"]
