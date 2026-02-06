@@ -1,12 +1,28 @@
 # CANlock 🔒
 
+<p align="center">
+    <img src="doc/images/canbus.jpg" alt="CANlock Banner" width="80%">
+</p>
+
 ## Fiche d'Identité
 
-*   **Type de projet :** Projet Partenaire (Entreprise)
-*   **Team Lead :** Loïc Baret
-*   **Partenaire Académique/Industriel :** Thales
-*   **Effectif recherché :** 5 membres
-*   **Profils recherchés :** IA/Data Science, Cybersécurité, Systèmes embarqués
+<p align="center" style="display: flex; align-items: center; justify-content: center;">
+  <img src="doc/images/Thales_Logo.png" width="50%" style="margin-right: 10%;" />
+  <img src="doc/images/CIA_LOGO.png" width="20%" style="margin-left: 10%;" />
+</p>
+
+
+*   **Type de projet:** Projet Partenaire (Entreprise)
+*   **Team Lead:** Loïc Baret
+*   **Partenaire Académique/Industriel:** Thales Canada - CortAIx Lab
+*   **Effectif actuel:**
+    *   Michal Naumiak
+    *   Marin Kerboriou
+    *   Yanny Edvard Lafleur
+    *   Nadine Slimani
+    *   Manal Asmouh
+    *   Abdelkarim Mouachiq 
+*   **Compétences travaillées:** IA/Data Science, Cybersécurité, Systèmes embarqués
 
 ## Description du Projet
 
@@ -22,7 +38,15 @@
     *   Rapport technique de mi-session et de fin de session.
     *   Article de recherche ou preuve de concept exploitable par Thales (objectif secondaire).
 
+## Avancement
+
+La première session nous a permis de nous familiariser avec le projet et de comprendre le contexte. Nous avons mis en place un pipeline de traitement des données et avons testé plusieurs approches d'analyse. Tout ce qui a été fait est disponible dans le dossier `doc/documents`.
+
+Le premier rapport est disponible [ici](doc/documents/Projet%20CANLock%20-%20Gala.pdf).
+
 ## Timeline Prévisionnelle de la Session
+
+### Session 1 - A25
 
 | Semaine | Activité/Phase                                                                                     |
 | :-----: | :------------------------------------------------------------------------------------------------- |
@@ -33,6 +57,15 @@
 | **9-12**  | **Développement - Phase 2 :** Itérations d'amélioration et tests des modèles.                      |
 |  **13**   | **Présentation d'avancement #2 / Préparation finale**                                              |
 | **14-15** | **Finalisation :** Tests finaux, rédaction du rapport technique final et documentation.            |
+
+### Session 2 - H26
+
+| Date         | objectif | 
+| :----------: | :------: |
+| **Semaines 1-4**  |   Survol de ce qui a été fait sur le projet en équipe et revue de littérature.   |
+| **Semaines 4-7**  |   Étudier des approches que l'on pourrait implémenter pour le projet.   |
+| **Semaines 7-11**  |   Implémenter et tester les approches   |
+| **Semaines 11-13**  |   Bilan et rapport final   |
 
 ## Technologies & Compétences Visées
 
@@ -88,6 +121,16 @@ Les étapes à suivre une fois l'extension installée:
 
 
 **Attention:** Le script d'importation peut prendre un certain temps en fonction de la puissance de ta machine. Attends que le processus se termine avant de faire quoi que ce soit d'autre, sinon tu risques d'avoir des erreurs. Tu sauras que le processus est terminé lorsque tu verras le pannonceau de chargement en bas à droite de ta fenêtre VS Code disparaitre et laisser place à un message de réussite d'importation.
+
+#### Si l'import via l'extension VS Code ne fonctionne pas
+
+Exécute la commande suivante dans le terminal de ton choix:
+
+```sh
+docker exec -i NOM_DU_CONTENEUR psql -U postgres < "C:\Chemin\Vers\Ton\Fichier.sql"
+```
+
+Le nom du conteneur devrait être `postgres`.
 
 #### Ancienne méthode de téléchargement des données
 En attendant la confirmation pour l'accès aux données Thales, tu peux télécharger les données [`Heavy Truck`](https://etsin.fairdata.fi/dataset/7586f24f-c91b-41df-92af-283524de8b3e) basés sur le même protocole bus CAN J1939 pour te faire une idée des données qui vont être utilisés durant le projet.
