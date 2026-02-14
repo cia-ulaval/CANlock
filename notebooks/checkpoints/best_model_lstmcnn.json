@@ -1,0 +1,38 @@
+{
+  "epoch": 29,
+  "model_config": {
+    "input_dim": 12,
+    "num_classes": 5,
+    "window_size": 50,
+    "model_class": "LSTMCNN"
+  },
+  "metrics": {
+    "accuracy": 0.8433333333333334,
+    "precision_macro": 0.7838888888888889,
+    "recall_macro": 0.768306279371748,
+    "f1_macro": 0.7730315163125476,
+    "precision_micro": 0.8433333333333334,
+    "recall_micro": 0.8433333333333334,
+    "f1_micro": 0.8433333333333334,
+    "precision_normal": 0.94375,
+    "recall_normal": 0.9805194805194806,
+    "f1_normal": 0.9617834394904459,
+    "support_normal": 154,
+    "precision_dos": 0.90625,
+    "recall_dos": 0.7073170731707317,
+    "f1_dos": 0.7945205479452054,
+    "support_dos": 41,
+    "precision_fuzzing": 0.6666666666666666,
+    "recall_fuzzing": 0.7111111111111111,
+    "f1_fuzzing": 0.6881720430107527,
+    "support_fuzzing": 45,
+    "precision_spoofing": 0.7916666666666666,
+    "recall_spoofing": 0.8636363636363636,
+    "f1_spoofing": 0.8260869565217391,
+    "support_spoofing": 22,
+    "precision_injection": 0.6111111111111112,
+    "recall_injection": 0.5789473684210527,
+    "f1_injection": 0.5945945945945946,
+    "support_injection": 38
+  }
+}

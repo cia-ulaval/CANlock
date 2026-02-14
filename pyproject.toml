@@ -10,13 +10,16 @@ dependencies = [
     "ipykernel>=6.30.1",
     "ipywidgets>=8.1.7",
     "nbformat>=5.10.4",
+    "numpy>=1.24.0",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
     "psycopg2>=2.9.10",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",
     "requests>=2.32.5",
+    "scikit-learn>=1.3.0",
     "sqlmodel>=0.0.27",
+    "torch>=2.0.0",
     "tqdm>=4.67.1",
 ]
 
@@ -24,6 +27,8 @@ dependencies = [
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
 analyze-session = "canlock.cli:analyze_session"
+train-ids = "canlock.cli:train_ids"
+generate-attacks = "canlock.cli:generate_attacks"
 
 
 [build-system]

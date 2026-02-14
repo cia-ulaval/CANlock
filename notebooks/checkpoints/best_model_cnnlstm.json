@@ -1,0 +1,38 @@
+{
+  "epoch": 23,
+  "model_config": {
+    "input_dim": 12,
+    "num_classes": 5,
+    "window_size": 50,
+    "model_class": "CNNLSTM"
+  },
+  "metrics": {
+    "accuracy": 0.83,
+    "precision_macro": 0.7474624237046597,
+    "recall_macro": 0.7551575538995309,
+    "f1_macro": 0.737311630681569,
+    "precision_micro": 0.83,
+    "recall_micro": 0.83,
+    "f1_micro": 0.83,
+    "precision_normal": 0.9440993788819876,
+    "recall_normal": 0.987012987012987,
+    "f1_normal": 0.9650793650793651,
+    "support_normal": 154,
+    "precision_dos": 0.8484848484848485,
+    "recall_dos": 0.6829268292682927,
+    "f1_dos": 0.7567567567567568,
+    "support_dos": 41,
+    "precision_fuzzing": 0.6530612244897959,
+    "recall_fuzzing": 0.7111111111111111,
+    "f1_fuzzing": 0.6808510638297872,
+    "support_fuzzing": 45,
+    "precision_spoofing": 0.6666666666666666,
+    "recall_spoofing": 1.0,
+    "f1_spoofing": 0.8,
+    "support_spoofing": 22,
+    "precision_injection": 0.625,
+    "recall_injection": 0.39473684210526316,
+    "f1_injection": 0.4838709677419355,
+    "support_injection": 38
+  }
+}

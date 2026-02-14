@@ -71,6 +71,92 @@ def analyze_session(session_id: str) -> None:
             click.echo(df.head())
 
 
+@click.command()
+@click.option("--model", type=click.Choice(['cnn-lstm', 'lstm-cnn']), required=True, help="Model architecture to train")
+@click.option("--dataset-dir", type=ClickPath(exists=True, path_type=Path), default="data/attack_datasets", help="Dataset directory")
+@click.option("--epochs", type=int, default=50, help="Number of epochs")
+@click.option("--batch-size", type=int, default=128, help="Batch size")
+@click.option("--lr", type=float, default=0.001, help="Learning rate")
+@click.option("--window-size", type=int, default=50, help="Window size")
+@click.option("--checkpoint-dir", type=ClickPath(path_type=Path), default="checkpoints", help="Checkpoint directory")
+def train_ids(model: str, dataset_dir: Path, epochs: int, batch_size: int, lr: float, window_size: int, checkpoint_dir: Path) -> None:
+    """Train a CAN IDS model."""
+    import torch
+    import pandas as pd
+    from canlock.models import CNNLSTM, LSTMCNN
+    from canlock.training import create_dataloaders, IDSTrainer
+    
+    click.echo(f"Training {model.upper()} model...")
+    
+    # Load datasets
+    train_df = pd.read_parquet(dataset_dir / "train.parquet")
+    val_df = pd.read_parquet(dataset_dir / "val.parquet")
+    test_df = pd.read_parquet(dataset_dir / "test.parquet")
+    
+    # Create dataloaders
+    train_loader, val_loader, test_loader, scaler = create_dataloaders(
+        train_df, val_df, test_df, 
+        window_size=window_size, 
+        batch_size=batch_size,
+        scaler_path=checkpoint_dir / "scaler.pkl"
+    )
+    
+    # Create model
+    input_dim = 12  # CAN_ID, DLC, Priority, TimeDelta + 8 payload bytes
+    if model == 'cnn-lstm':
+        ids_model = CNNLSTM(input_dim=input_dim, window_size=window_size)
+    else:
+        ids_model = LSTMCNN(input_dim=input_dim, window_size=window_size)
+    
+    # Create trainer
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    trainer = IDSTrainer(
+        model=ids_model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        device=device,
+        lr=lr,
+        checkpoint_dir=checkpoint_dir
+    )
+    
+    # Train
+    history = trainer.train(num_epochs=epochs)
+    
+    # Test
+    metrics = trainer.test(test_loader)
+    
+    click.echo("\nTraining complete!")
+
+
+@click.command()
+@click.option("--output", type=ClickPath(path_type=Path), default="data/attack_datasets/full_dataset.parquet", help="Output path")
+@click.option("--num-samples", type=int, default=100000, help="Number of samples to generate")
+@click.option("--use-real-ids/--no-real-ids", default=True, help="Use real CAN IDs from database")
+def generate_attacks(output: Path, num_samples: int, use_real_ids: bool) -> None:
+    """Generate synthetic attack dataset."""
+    from canlock.attacks import AttackDatasetGenerator
+    
+    click.echo(f"Generating {num_samples} attack samples...")
+    
+    generator = AttackDatasetGenerator(seed=42)
+    
+    if use_real_ids:
+        df = generator.generate_from_database(num_samples)
+    else:
+        df = generator.generate(num_samples)
+    
+    # Split and save
+    output_dir = output.parent
+    train_df, val_df, test_df = generator.split_dataset(df)
+    
+    generator.save_dataset(train_df, output_dir / "train.parquet")
+    generator.save_dataset(val_df, output_dir / "val.parquet")
+    generator.save_dataset(test_df, output_dir / "test.parquet")
+    generator.save_dataset(df, output)
+    
+    click.echo(f"\n✓ Dataset saved to {output_dir}")
+
+
 
 if __name__ == "__main__":
     main()
