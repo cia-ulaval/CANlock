@@ -12,11 +12,14 @@ dependencies = [
     "nbformat>=5.10.4",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
-    "psycopg2>=2.9.10",
+    "psycopg2-binary>=2.9.10",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.11.0",
+    "pytorch-lightning>=2.0.0",
     "requests>=2.32.5",
+    "scikit-learn>=1.4.0",
     "sqlmodel>=0.0.27",
+    "torch>=2.0.0",
     "tqdm>=4.67.1",
 ]
 
