@@ -97,11 +97,21 @@ def parse_args():
     p.add_argument("--limit", type=int, default=2000)
     p.add_argument("--out", default="data/cache/attacked_window.pkl")
     p.add_argument("--spoof-rate", type=float, default=0.01)
+    p.add_argument("--spoof-sigma-factor", type=float, default=0.05, help="relative sigma factor for spoofing analog perturbation")
+    p.add_argument("--spoof-min-sigma", type=float, default=1.0, help="minimum sigma for spoofing analog perturbation")
     p.add_argument("--suspend-frac", type=float, default=0.05)
+    p.add_argument("--tec-increment", type=int, default=8, help="TEC increment per failure for suspension simulation")
+    p.add_argument("--busoff-threshold", type=int, default=256, help="TEC threshold to consider bus-off")
     p.add_argument("--masq-prob", type=float, default=0.2)
     p.add_argument("--attacker-src", type=lambda x: int(x, 0), default=0x99, help="attacker source address (int/hex)")
     p.add_argument("--mode", choices=["append", "replace"], default="append")
+    p.add_argument("--replay-rate", type=float, default=0.0, help="fraction of messages/sequences to replay")
+    p.add_argument("--replay-delay", type=float, default=1.0, help="seconds to delay replayed frames")
+    p.add_argument("--replay-seq", action="store_true", help="replay contiguous sequences instead of isolated frames")
+    p.add_argument("--replay-length", type=int, default=1, help="sequence length when --replay-seq is set")
     p.add_argument("--spn", type=int, default=None, help="SPN identifier to target (single-SPN attacks)")
+    p.add_argument("--attack-order", type=str, default="spoofing,masquerade,replay,suspension",
+                   help="Comma-separated order in which to apply attacks. Valid names: spoofing, masquerade, replay, suspension")
     return p.parse_args()
 
 
@@ -113,16 +123,36 @@ def main() -> None:
     print(f"Loaded {len(df):,} messages from DB (read-only)")
 
     # Build attack objects (one class per attack)
-    spoof = SpoofingAttack(injection_rate=args.spoof_rate)
-    susp = SuspensionAttack(suspend_fraction=args.suspend_frac)
+    spoof = SpoofingAttack(injection_rate=args.spoof_rate, mode=args.mode, sigma_factor=args.spoof_sigma_factor, min_sigma=args.spoof_min_sigma)
+    susp = SuspensionAttack(suspend_fraction=args.suspend_frac, tec_increment=args.tec_increment, bus_off_threshold=args.busoff_threshold)
     masq = MasqueradeAttack(attacker_source=args.attacker_src, prob=args.masq_prob)
-    replay = ReplayAttack(replay_rate=0.0, delay_seconds=1.0) 
+    replay = ReplayAttack(replay_rate=args.replay_rate, delay_seconds=args.replay_delay, replay_sequence=args.replay_seq, sequence_length=args.replay_length)
 
-    # Application séquentielle propre
-    df_spoofed = spoof.apply(df, target=args.spn)
-    df_masq = masq.apply(df_spoofed, target=args.spn)
-    df_replay = replay.apply(df_masq, target=args.spn)
-    df_final = susp.apply(df_replay, target=args.spn)
+    # Application séquentielle selon l'ordre demandé
+    attack_funcs = {
+        "spoofing": lambda d: spoof.apply(d, target=args.spn),
+        "masquerade": lambda d: masq.apply(d, target=args.spn),
+        "replay": lambda d: replay.apply(d, target=args.spn),
+        "suspension": lambda d: susp.apply(d, target=args.spn),
+    }
+
+    # normalize and validate order tokens
+    order_tokens = [t.strip().lower() for t in args.attack_order.split(",") if t.strip()]
+    # accept short synonyms
+    syn_map = {"spoof": "spoofing", "masq": "masquerade", "susp": "suspension"}
+    normalized = []
+    for t in order_tokens:
+        t2 = syn_map.get(t, t)
+        if t2 not in attack_funcs:
+            raise SystemExit(f"Invalid attack name in --attack-order: {t} (valid: {', '.join(attack_funcs.keys())})")
+        normalized.append(t2)
+
+    # apply attacks in requested order
+    df_current = df
+    for atk in normalized:
+        df_current = attack_funcs[atk](df_current)
+
+    df_final = df_current
 
     # 1. Mise à jour de la colonne 'length'
     def _actual_length(p):

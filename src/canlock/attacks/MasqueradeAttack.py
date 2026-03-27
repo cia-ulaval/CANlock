@@ -63,6 +63,9 @@ class MasqueradeAttack(AttackBase):
         for i in chosen:
             cid = int(df2.loc[i, "can_identifier"]) if df2.loc[i, "can_identifier"] is not None else 0
             new_cid = (cid & ~0xFF) | (self.attacker_source & 0xFF) if self.attacker_source is not None else cid
+            # ESCALADE DE PRIORITÉ : Forcer les 3 bits de priorité (26-28) à 0 (Priorité maximale)
+            # Le masque ~(0x7 << 26) efface les bits de priorité
+            new_cid = new_cid & ~(0x7 << 26)
             df2.loc[i, "can_identifier"] = new_cid
             # If targeting a specific SPN, also adjust SPN bits slightly to look plausible
             if target is not None:

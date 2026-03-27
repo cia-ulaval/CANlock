@@ -22,10 +22,13 @@ class ReplayAttack(AttackBase):
     - Uses the same CAN ID (legitimate ID) so messages look syntactically valid.
     """
 
-    def __init__(self, replay_rate: float = 0.05, delay_seconds: float = 1.0, seed: Optional[int] = None):
+    def __init__(self, replay_rate: float = 0.05, delay_seconds: float = 1.0, replay_sequence: bool = False, sequence_length: int = 1, preserve_interval: bool = True, seed: Optional[int] = None):
         super().__init__("replay")
         self.replay_rate = float(replay_rate)
         self.delay_seconds = float(delay_seconds)
+        self.replay_sequence = bool(replay_sequence)
+        self.sequence_length = int(sequence_length)
+        self.preserve_interval = bool(preserve_interval)
         if seed is not None:
             random.seed(seed)
 
@@ -68,23 +71,47 @@ class ReplayAttack(AttackBase):
         chosen = random.sample(candidates, n_replay) if len(candidates) >= n_replay else candidates
 
         replayed_rows = []
-        for idx in chosen:
-            row = df2.loc[idx].copy()
-            # keep the same CAN id (legitimate ID), keep payload unchanged
-            # shift timestamp forward by delay_seconds (string or numeric handled by pd.to_datetime)
-            try:
-                ts = pd.to_datetime(row["timestamp"]) + pd.to_timedelta(self.delay_seconds, unit="s")
-                # keep timestamp as a pandas Timestamp to avoid mixed types
-                row["timestamp"] = pd.Timestamp(ts)
-            except Exception:
-                # if timestamp can't be parsed, keep original timestamp value
-                row["timestamp"] = row.get("timestamp")
-
-            row["attack_type"] = self.name
-            # mark that this is a replay and keep an optional hint
-            row["replay_source_index"] = int(idx)
-            row["replay_delay_s"] = float(self.delay_seconds)
-            replayed_rows.append(row)
+        if self.replay_sequence and self.sequence_length > 1:
+            # replay contiguous sequences of length `sequence_length`
+            max_start = len(df2) - self.sequence_length
+            seq_candidates = [i for i in candidates if i <= max_start]
+            if not seq_candidates:
+                return df2
+            chosen_starts = random.sample(seq_candidates, min(len(seq_candidates), n_replay))
+            for start in chosen_starts:
+                seq_idxs = list(range(start, start + self.sequence_length))
+                base_ts = pd.to_datetime(df2.loc[start, "timestamp"]) if not pd.isna(df2.loc[start, "timestamp"]) else None
+                # compute deltas if preserving intervals
+                deltas = []
+                if self.preserve_interval and base_ts is not None:
+                    for j in seq_idxs:
+                        deltas.append(pd.to_datetime(df2.loc[j, "timestamp"]) - base_ts)
+                for j, orig_idx in enumerate(seq_idxs):
+                    row = df2.loc[orig_idx].copy()
+                    try:
+                        if base_ts is not None and self.preserve_interval:
+                            new_ts = base_ts + deltas[j] + pd.to_timedelta(self.delay_seconds, unit="s")
+                            row["timestamp"] = pd.Timestamp(new_ts)
+                        else:
+                            row["timestamp"] = pd.Timestamp(pd.to_datetime(row["timestamp"]) + pd.to_timedelta(self.delay_seconds, unit="s"))
+                    except Exception:
+                        row["timestamp"] = row.get("timestamp")
+                    row["attack_type"] = self.name
+                    row["replay_source_index"] = int(orig_idx)
+                    row["replay_delay_s"] = float(self.delay_seconds)
+                    replayed_rows.append(row)
+        else:
+            for idx in chosen:
+                row = df2.loc[idx].copy()
+                try:
+                    ts = pd.to_datetime(row["timestamp"]) + pd.to_timedelta(self.delay_seconds, unit="s")
+                    row["timestamp"] = pd.Timestamp(ts)
+                except Exception:
+                    row["timestamp"] = row.get("timestamp")
+                row["attack_type"] = self.name
+                row["replay_source_index"] = int(idx)
+                row["replay_delay_s"] = float(self.delay_seconds)
+                replayed_rows.append(row)
 
         if replayed_rows:
             df2 = pd.concat([df2, pd.DataFrame(replayed_rows)], ignore_index=True).sort_values("timestamp").reset_index(drop=True)

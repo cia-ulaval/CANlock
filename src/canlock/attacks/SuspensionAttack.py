@@ -17,9 +17,12 @@ from collections import Counter
 class SuspensionAttack(AttackBase):
     """Suspension attack that masks (removes) a fraction of messages for a target PGN/SPN."""
 
-    def __init__(self, suspend_fraction: float = 0.1, seed: Optional[int] = None):
+    def __init__(self, suspend_fraction: float = 0.1, tec_increment: int = 8, bus_off_threshold: int = 256, recovery_delay_s: float = 0.05, seed: Optional[int] = None):
         super().__init__("suspension")
         self.suspend_fraction = float(suspend_fraction)
+        self.tec_increment = int(tec_increment)
+        self.bus_off_threshold = int(bus_off_threshold)
+        self.recovery_delay_s = float(recovery_delay_s) # Délai de 50ms par défaut
         if seed is not None:
             random.seed(seed)
 
@@ -61,11 +64,8 @@ class SuspensionAttack(AttackBase):
 
         n_remove = int(len(candidates) * self.suspend_fraction)
         to_modify = set(random.sample(candidates, n_remove)) if n_remove else set()
+        
         if spn_def is not None:
-            # Simulate Bus-Off style suspension per-description:
-            # - choose the victim source (ECU) as the most frequent source for this PGN
-            # - for messages from that source, simulate repeated error injections: each failed attempt
-            #   increments a TEC-like counter by 8; when >=256 mark bus-off and remove further messages
             # compute src per message (LSB of CAN id)
             def _src(can_id):
                 if can_id is None:
@@ -73,8 +73,8 @@ class SuspensionAttack(AttackBase):
                 return int(can_id) & 0xFF
 
             df2["src"] = df2["can_identifier"].apply(_src)
-            # candidate indices for the target PGN
             pgn_candidates = [i for i in candidates]
+            
             # select the victim source as the most common src among candidates
             srcs = [df2.loc[i, "src"] for i in pgn_candidates if df2.loc[i, "src"] is not None]
             if not srcs:
@@ -82,30 +82,45 @@ class SuspensionAttack(AttackBase):
             counts = Counter(srcs)
             victim_src = counts.most_common(1)[0][0]
 
-            # get ordered indices for messages from victim_src and target PGN
-            victim_idxs = [i for i in pgn_candidates if df2.loc[i, "src"] == victim_src]
-            # sort by timestamp to simulate chronological attempts
-            victim_idxs.sort(key=lambda x: pd.to_datetime(df2.loc[x, "timestamp"]))
+            # 1. On identifie les messages spécifiquement ciblés par l'attaque
+            victim_target_idxs = set(i for i in pgn_candidates if df2.loc[i, "src"] == victim_src)
+            
+            # 2. On récupère TOUS les messages de la victime pour simuler le temps qui passe
+            victim_all_idxs = df2.index[df2["src"] == victim_src].tolist()
+            victim_all_idxs.sort(key=lambda x: pd.to_datetime(df2.loc[x, "timestamp"]))
 
             TEC = 0
-            BUS_OFF_THRESHOLD = 256
-            for idx in victim_idxs:
-                if TEC < BUS_OFF_THRESHOLD:
-                    # simulate injected bit error causing the frame to fail -> payload effectively lost
-                    df2.loc[idx, "payload"] = None
-                    df2.loc[idx, "attack_type"] = "suspension"  # error injection event
-                    TEC += 8
+            last_bus_off_time = None
+
+            for idx in victim_all_idxs:
+                current_time = pd.to_datetime(df2.loc[idx, "timestamp"])
+
+                # ÉVALUATION DE LA RECONNEXION
+                if TEC >= self.bus_off_threshold and last_bus_off_time is not None:
+                    # Si le délai (ex: 50ms) est écoulé, l'ECU redémarre
+                    if (current_time - last_bus_off_time).total_seconds() >= self.recovery_delay_s:
+                        TEC = 0
+                        last_bus_off_time = None
+
+                # APPLICATION DES EFFETS
+                if TEC < self.bus_off_threshold:
+                    # L'ECU est en ligne. L'attaquant perturbe-t-il CE message ?
+                    if idx in victim_target_idxs:
+                        df2.loc[idx, "payload"] = None
+                        df2.loc[idx, "attack_type"] = "suspension"
+                        TEC += self.tec_increment
+                        
+                        # Si l'injection d'erreur le fait passer en Bus-Off, on note l'heure
+                        if TEC >= self.bus_off_threshold:
+                            last_bus_off_time = current_time
                 else:
-                    # ECU is now bus-off; subsequent frames are not sent -> mark them as bus_off
+                    # L'ECU est en Bus-Off. Il n'arrive pas à envoyer ce message.
                     df2.loc[idx, "payload"] = None
                     df2.loc[idx, "attack_type"] = "bus_off"
-            # For completeness, mark any later messages from same victim as bus_off as well
-            remaining_idxs = [i for i in df2.index if df2.loc[i, "src"] == victim_src and i not in victim_idxs]
-            for i in remaining_idxs:
-                df2.loc[i, "payload"] = None
-                df2.loc[i, "attack_type"] = "bus_off"
+
         else:
             # fallback behavior: remove entire payload if no SPN target resolution
             df2.loc[df2.index.isin(to_modify), "payload"] = None
             df2.loc[df2.index.isin(to_modify), "attack_type"] = self.name
+            
         return df2
