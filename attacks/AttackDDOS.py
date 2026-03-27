@@ -5,7 +5,7 @@ class DDoSAttack:
     def __init__(self, signal_name, repetitions=1000, interval=0.0001):
         self.signal_name = signal_name
         self.repetitions = repetitions
-        self.interval = interval  # intervalle temporel
+        self.interval = interval  
 
 
     def inject(self, df):
