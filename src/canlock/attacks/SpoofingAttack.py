@@ -21,10 +21,12 @@ class SpoofingAttack(AttackBase):
     In future iterations this can be extended to target a SPN specifically.
     """
 
-    def __init__(self, injection_rate: float = 0.01, mode: str = "append", seed: Optional[int] = None):
+    def __init__(self, injection_rate: float = 0.01, mode: str = "append", sigma_factor: float = 0.05, min_sigma: float = 1.0, seed: Optional[int] = None):
         super().__init__("spoofing")
         self.injection_rate = float(injection_rate)
         self.mode = mode
+        self.sigma_factor = float(sigma_factor)
+        self.min_sigma = float(min_sigma)
         if seed is not None:
             random.seed(seed)
 
@@ -83,8 +85,8 @@ class SpoofingAttack(AttackBase):
                     an = spn_def.analog_attributes
                     if orig_raw is not None:
                         orig_phys = an.scale * orig_raw + an.offset
-                        # small gaussian perturbation: 5% of magnitude or 1.0
-                        sigma = max(abs(orig_phys) * 0.05, 1.0)
+                        # small gaussian perturbation: configurable factor or min_sigma
+                        sigma = max(abs(orig_phys) * self.sigma_factor, self.min_sigma)
                         new_phys = orig_phys + random.gauss(0, sigma)
                     else:
                         # choose a mid-range guess if no original: use offset

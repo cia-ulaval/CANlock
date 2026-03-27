@@ -10,32 +10,40 @@ from canlock.db.models import SpnDefinition
 def _ensure_bytes(payload: Optional[bytes]) -> bytes:
     if payload is None:
         return b"\x00" * 8
-    return bytes(payload)[:8].ljust(8, b"\x00")
+    b = bytes(payload)
+    if len(b) < 8:
+        return b.ljust(8, b"\x00")
+    return b
 
 
 def _get_binary_payload(payload: Optional[bytes]) -> str:
     b = _ensure_bytes(payload)
-    intval = int(b.hex(), 16)
-    return bin(intval)[2:].zfill(64)
-
+    intval = int(b.hex(), 16) if len(b) > 0 else 0
+    return bin(intval)[2:].zfill(len(b) * 8)
 
 def set_spn_bits(payload: Optional[bytes], spn: SpnDefinition, new_raw: int) -> bytes:
-    """Return a new 8-byte payload with the SPN bits replaced by new_raw.
-
-    This uses the same bit indexing convention as SessionDecoder.extract_spn_bits_from_payload.
-    """
-    bin_payload = _get_binary_payload(payload)
+    """Return a new dynamic-length payload with the SPN bits replaced by new_raw."""
+    b = _ensure_bytes(payload)
+    bin_payload = _get_binary_payload(b)
+    
     start = spn.bit_start
     length = spn.bit_length
     mask_max = (1 << length) - 1
+    
     if new_raw is None:
         new_raw = 0
     if new_raw < 0 or new_raw > mask_max:
         raise ValueError("new_raw does not fit in spn bit_length")
+        
     new_bits = bin(new_raw)[2:].zfill(length)
+    
+    # Remplacement exact au niveau des bits
     new_bin = bin_payload[:start] + new_bits + bin_payload[start + length :]
     new_int = int(new_bin, 2)
-    return new_int.to_bytes(8, "big")
+    
+    # Reconversion en octets en respectant la longueur nécessaire
+    byte_length = (len(new_bin) + 7) // 8
+    return new_int.to_bytes(byte_length, "big")
 
 
 def get_spn_bits(payload: Optional[bytes], spn: SpnDefinition) -> int:
