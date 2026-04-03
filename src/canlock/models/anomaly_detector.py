@@ -27,7 +27,11 @@ class AnomalyDetector:
         return np.array(reconstruction_errors), np.array(all_targets)
 
     def find_optimal_threshold(self, errors, targets):
+        if len(np.unique(targets)) < 2:
+            raise ValueError("targets must contain at least two classes to compute an optimal threshold")
         precision, recall, thresholds = precision_recall_curve(targets, errors)
+        if len(thresholds) == 0:
+            raise ValueError("precision_recall_curve returned no thresholds")
         f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
         optimal_idx = np.argmax(f1_scores)
         optimal_threshold = thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
@@ -35,9 +39,22 @@ class AnomalyDetector:
 
     def evaluate(self, errors, targets, threshold):
         preds = (errors > threshold).astype(int)
-        report = classification_report(targets, preds, target_names=['Normal', 'Anomalie'])
-        auc = roc_auc_score(targets, errors)
-        cm = confusion_matrix(targets, preds)
+        labels = [0, 1]
+        report = classification_report(
+            targets,
+            preds,
+            labels=labels,
+            target_names=['Normal', 'Anomalie'],
+            zero_division=0,
+        )
+
+        unique_targets = np.unique(targets)
+        if unique_targets.size < 2:
+            auc = np.nan
+        else:
+            auc = roc_auc_score(targets, errors)
+
+        cm = confusion_matrix(targets, preds, labels=labels)
         tn, fp, fn, tp = cm.ravel()
         return {
             'classification_report': report,
