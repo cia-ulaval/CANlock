@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 
-class CNN_LSTM_Autoencoder(pl.LightningModule):
+class CnnLstmAutoencoder(pl.LightningModule):
     """
     Autoencoder pour la détection d'anomalies sur données CAN.
     - Encoder: CNN pour extraction de features + LSTM pour dépendances temporelles
@@ -10,6 +10,8 @@ class CNN_LSTM_Autoencoder(pl.LightningModule):
     """
     def __init__(self, n_features: int, seq_len: int, lr: float = 1e-3):
         super().__init__()
+        if seq_len < 4:
+            raise ValueError(f"seq_len must be >= 4, got {seq_len}")
         self.save_hyperparameters()
         self.n_features = n_features
         self.seq_len = seq_len
