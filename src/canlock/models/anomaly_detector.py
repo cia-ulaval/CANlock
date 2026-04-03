@@ -1,18 +1,25 @@
 import numpy as np
 import torch
-from sklearn.metrics import precision_recall_curve, classification_report, roc_auc_score, confusion_matrix
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    precision_recall_curve,
+    roc_auc_score,
+)
+
 
 class AnomalyDetector:
     """
     Classe utilitaire pour la détection d'anomalies par reconstruction.
     Gère le calcul des erreurs, le choix du seuil optimal et l'évaluation.
     """
-    def __init__(self, model, datamodule, device='cpu'):
+
+    def __init__(self, model, datamodule, device="cpu"):
         self.model = model
         self.datamodule = datamodule
         self.device = device
 
-    def compute_reconstruction_errors(self):
+    def compute_reconstruction_errors(self) -> np.ndarray:
         self.model.eval()
         self.model.to(self.device)
         reconstruction_errors = []
@@ -26,25 +33,37 @@ class AnomalyDetector:
                 all_targets.extend(batch_y.numpy())
         return np.array(reconstruction_errors), np.array(all_targets)
 
-    def find_optimal_threshold(self, errors, targets):
+    def find_optimal_threshold(
+        self, errors: np.ndarray, targets: np.ndarray
+    ) -> tuple[float, float]:
         if len(np.unique(targets)) < 2:
-            raise ValueError("targets must contain at least two classes to compute an optimal threshold")
+            raise ValueError(
+                "targets must contain at least two classes to compute an optimal threshold"
+            )
         precision, recall, thresholds = precision_recall_curve(targets, errors)
         if len(thresholds) == 0:
             raise ValueError("precision_recall_curve returned no thresholds")
         f1_scores = 2 * (precision * recall) / (precision + recall + 1e-8)
         optimal_idx = np.argmax(f1_scores)
-        optimal_threshold = thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
+
+        if len(thresholds) == 0:
+            raise ValueError("thresholds variable is empty.")
+
+        optimal_threshold = (
+            thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
+        )
         return optimal_threshold, f1_scores[optimal_idx]
 
-    def evaluate(self, errors, targets, threshold):
+    def evaluate(
+        self, errors: np.ndarray, targets: np.ndarray, threshold: float
+    ) -> dict[str, float]:
         preds = (errors > threshold).astype(int)
         labels = [0, 1]
         report = classification_report(
             targets,
             preds,
             labels=labels,
-            target_names=['Normal', 'Anomalie'],
+            target_names=["Normal", "Anomalie"],
             zero_division=0,
         )
 
@@ -57,10 +76,13 @@ class AnomalyDetector:
         cm = confusion_matrix(targets, preds, labels=labels)
         tn, fp, fn, tp = cm.ravel()
         return {
-            'classification_report': report,
-            'auc': auc,
-            'confusion_matrix': cm,
-            'tn': tn, 'fp': fp, 'fn': fn, 'tp': tp,
-            'fpr': fp / (fp + tn) if (fp + tn) > 0 else 0,
-            'recall': tp / (tp + fn) if (tp + fn) > 0 else 0
+            "classification_report": report,
+            "auc": auc,
+            "confusion_matrix": cm,
+            "tn": tn,
+            "fp": fp,
+            "fn": fn,
+            "tp": tp,
+            "fpr": fp / (fp + tn) if (fp + tn) > 0 else 0,
+            "recall": tp / (tp + fn) if (tp + fn) > 0 else 0,
         }

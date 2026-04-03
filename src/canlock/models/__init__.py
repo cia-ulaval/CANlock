@@ -1,3 +1,3 @@
-from .cnn_lstm_autoencoder import CnnLstmAutoencoder
-from .can_data_module import CANDataModule
-from .anomaly_detector import AnomalyDetector
+from canlock.data.can_data_module import CANDataModule
+from canlock.models.anomaly_detector import AnomalyDetector
+from canlock.models.cnn_lstm_autoencoder import CnnLstmAutoencoder
