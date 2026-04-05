@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Optional
 
-import pandas as pd
 from canlock.db.models import SpnDefinition
 
 
 def _ensure_bytes(payload: Optional[bytes]) -> bytes:
+    """Ensure a payload is converted to exactly an 8-byte array.
+    
+    Args:
+        payload: The byte-like payload, which may be None.
+        
+    Returns:
+        The normalized 8-byte payload.
+    """
     if payload is None:
         return b"\x00" * 8
     b = bytes(payload)
@@ -17,12 +23,29 @@ def _ensure_bytes(payload: Optional[bytes]) -> bytes:
 
 
 def _get_binary_payload(payload: Optional[bytes]) -> str:
+    """Get the string binary representation of a payload.
+    
+    Args:
+        payload: The byte-like payload, which may be None.
+        
+    Returns:
+        A binary string representation of the payload.
+    """
     b = _ensure_bytes(payload)
     intval = int(b.hex(), 16) if len(b) > 0 else 0
     return bin(intval)[2:].zfill(len(b) * 8)
 
 def set_spn_bits(payload: Optional[bytes], spn: SpnDefinition, new_raw: int) -> bytes:
-    """Return a new dynamic-length payload with the SPN bits replaced by new_raw."""
+    """Return a new dynamic-length payload with the SPN bits replaced by new_raw.
+    
+    Args:
+        payload: The byte-like payload, which may be None.
+        spn: The definition mapping of the desired SPN.
+        new_raw: The integer value to inject.
+        
+    Returns:
+        The replaced byte representation of the full payload.
+    """
     b = _ensure_bytes(payload)
     bin_payload = _get_binary_payload(b)
     
@@ -47,32 +70,16 @@ def set_spn_bits(payload: Optional[bytes], spn: SpnDefinition, new_raw: int) -> 
 
 
 def get_spn_bits(payload: Optional[bytes], spn: SpnDefinition) -> int:
+    """Extract and return the SPN bits as an integer from the given payload.
+    
+    Args:
+        payload: The byte-like payload.
+        spn: The definition mapping of the targeted SPN.
+        
+    Returns:
+        The isolated bits for that SPN formatted as an int.
+    """
     bin_payload = _get_binary_payload(payload)
     start = spn.bit_start
     length = spn.bit_length
     return int(bin_payload[start : start + length], 2)
-
-
-class AttackBase(ABC):
-    """Abstract base class for attack algorithms.
-
-    Subclasses must implement `apply(df, target)` where `target` is the identifier
-    of the signal to attack (SPN, PGN or a custom filter). For now the
-    implementation expects the caller to provide a DataFrame and a `target`
-    that the subclass understands.
-    """
-
-    def __init__(self, name: str):
-        self.name = name
-
-    @abstractmethod
-    def apply(self, df: pd.DataFrame, target: Optional[int] = None) -> pd.DataFrame:
-        """Apply attack to the DataFrame and return a new DataFrame.
-
-        Args:
-            df: input DataFrame with CAN messages
-            target: identifier of the signal to attack (semantics left to subclass)
-        Returns:
-            df_attacked: DataFrame with modifications (attack annotations)
-        """
-        raise NotImplementedError()

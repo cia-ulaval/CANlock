@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import random
+import types
 from typing import Optional
 
 import pandas as pd
-
-from .AttackBase import AttackBase
-from canlock.decoder import SessionDecoder
-from canlock.db.database import get_session
-from canlock.db.models import SpnDefinition, PgnDefinition
 from sqlmodel import select
-import types
+
+from canlock.attacks.attack_base import AttackBase
+from canlock.db.database import get_session
+from canlock.db.models import PgnDefinition, SpnDefinition
+from canlock.decoder import SessionDecoder
 
 
 class ReplayAttack(AttackBase):
@@ -23,6 +23,16 @@ class ReplayAttack(AttackBase):
     """
 
     def __init__(self, replay_rate: float = 0.05, delay_seconds: float = 1.0, replay_sequence: bool = False, sequence_length: int = 1, preserve_interval: bool = True, seed: Optional[int] = None):
+        """Initialize a replay attack.
+        
+        Args:
+            replay_rate: Fraction of messages to replay.
+            delay_seconds: Seconds between original and replay.
+            replay_sequence: Whether to replay sequences of messages.
+            sequence_length: Length of sequences to replay.
+            preserve_interval: Preserve original timestamps.
+            seed: Seed for random variation.
+        """
         super().__init__("replay")
         self.replay_rate = float(replay_rate)
         self.delay_seconds = float(delay_seconds)
@@ -33,12 +43,33 @@ class ReplayAttack(AttackBase):
             random.seed(seed)
 
     def _get_pgn(self, can_id: Optional[int]) -> Optional[int]:
+        """Extract the PGN from a CAN identifier.
+        
+        Args:
+            can_id: The CAN identifier.
+            
+        Returns:
+            The extracted PGN or None on failure.
+        """
         try:
             return SessionDecoder.extract_pgn_number_from_payload(int(can_id)) if can_id is not None else None
         except Exception:
             return None
+    
+    def get_attack_name(self) -> str:
+        """Get the name of the attack."""
+        return self.name
 
     def apply(self, df: pd.DataFrame, target: Optional[int] = None) -> pd.DataFrame:
+        """Apply replay attack logic to the dataframe.
+        
+        Args:
+            df: Given internal dataframe setup.
+            target: The targeted signal ID or SPN identifier.
+            
+        Returns:
+            The newly modified dataframe containing replayed rows.
+        """
         if self.replay_rate <= 0:
             return df
         
