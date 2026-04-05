@@ -12,6 +12,7 @@ DA.xlsx
 
 # Virtual environments
 .venv
+uv.lock
 
 # Git
 data/*
