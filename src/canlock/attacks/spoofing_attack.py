@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import random
+import types
 from typing import Optional
 
 import pandas as pd
-
-from .AttackBase import AttackBase, set_spn_bits, get_spn_bits
-from canlock.decoder import SessionDecoder
-from canlock.db.database import get_session
-from canlock.db.models import PgnDefinition, SpnDefinition
 from sqlmodel import select
-import types
-from canlock.db.models import DefinedDigitalValues
+
+from canlock.attacks.attack_base import AttackBase, get_spn_bits, set_spn_bits
+from canlock.db.database import get_session
+from canlock.db.models import DefinedDigitalValues, PgnDefinition, SpnDefinition
+from canlock.decoder import SessionDecoder
 
 
 class SpoofingAttack(AttackBase):
@@ -21,7 +20,23 @@ class SpoofingAttack(AttackBase):
     In future iterations this can be extended to target a SPN specifically.
     """
 
-    def __init__(self, injection_rate: float = 0.01, mode: str = "append", sigma_factor: float = 0.05, min_sigma: float = 1.0, seed: Optional[int] = None):
+    def __init__(
+        self,
+        injection_rate: float = 0.01,
+        mode: str = "append",
+        sigma_factor: float = 0.05,
+        min_sigma: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Initialize the Spoofing attack logic.
+        
+        Args:
+            injection_rate: Rate of spoofed message insertions.
+            mode: Specify insertion mode, append or replace.
+            sigma_factor: Rate of sigma modifier.
+            min_sigma: Min scalar sigma allowed.
+            seed: For testing deterministic environments.
+        """
         super().__init__("spoofing")
         self.injection_rate = float(injection_rate)
         self.mode = mode
@@ -31,15 +46,40 @@ class SpoofingAttack(AttackBase):
             random.seed(seed)
 
     def _get_pgn(self, can_id: Optional[int]) -> Optional[int]:
+        """Fetch the PGN given an ID format.
+        
+        Args:
+            can_id: The integer representing a real ID.
+            
+        Returns:
+            The processed identifier integer mapping.
+        """
         try:
-            return SessionDecoder.extract_pgn_number_from_payload(int(can_id)) if can_id is not None else None
+            return (
+                SessionDecoder.extract_pgn_number_from_payload(int(can_id))
+                if can_id is not None
+                else None
+            )
         except Exception:
             return None
+    
+    def get_attack_name(self) -> str:
+        """Get the name of the attack."""
+        return self.name
 
     def apply(self, df: pd.DataFrame, target: Optional[int] = None) -> pd.DataFrame:
+        """Mutate a source payload with injected data components based on mode definitions.
+        
+        Args:
+            df: Standard target trace.
+            target: Used implicitly as PGN.
+            
+        Returns:
+            Altered version of DataFrame.
+        """
         if self.injection_rate <= 0:
             return df
-        
+
         df2 = df.copy()
         pgns = [self._get_pgn(x) for x in df2["can_identifier"].tolist()]
         df2["pgn"] = pgns
@@ -49,14 +89,28 @@ class SpoofingAttack(AttackBase):
         spn_def = None
         if target is not None:
             with get_session() as s:
-                spn_row = s.exec(select(SpnDefinition).where(SpnDefinition.spn_identifier == target)).first()
+                spn_row = s.exec(
+                    select(SpnDefinition).where(SpnDefinition.spn_identifier == target)
+                ).first()
                 if spn_row:
                     # build a small detached object carrying necessary attributes
                     an = None
                     if spn_row.analog_attributes:
-                        an = types.SimpleNamespace(scale=spn_row.analog_attributes.scale, offset=spn_row.analog_attributes.offset)
-                    spn_def = types.SimpleNamespace(id=spn_row.id, bit_length=spn_row.bit_length, bit_start=spn_row.bit_start, is_analog=spn_row.is_analog, analog_attributes=an, pgn_id=spn_row.pgn_id)
-                    pgn_def = s.exec(select(PgnDefinition).where(PgnDefinition.id == spn_row.pgn_id)).first()
+                        an = types.SimpleNamespace(
+                            scale=spn_row.analog_attributes.scale,
+                            offset=spn_row.analog_attributes.offset,
+                        )
+                    spn_def = types.SimpleNamespace(
+                        id=spn_row.id,
+                        bit_length=spn_row.bit_length,
+                        bit_start=spn_row.bit_start,
+                        is_analog=spn_row.is_analog,
+                        analog_attributes=an,
+                        pgn_id=spn_row.pgn_id,
+                    )
+                    pgn_def = s.exec(
+                        select(PgnDefinition).where(PgnDefinition.id == spn_row.pgn_id)
+                    ).first()
                     target_pgn = pgn_def.pgn_identifier if pgn_def else None
                 else:
                     target_pgn = None
@@ -67,8 +121,14 @@ class SpoofingAttack(AttackBase):
         else:
             candidates = df2.index.tolist()
 
-        n_inject = max(1, int(len(candidates) * self.injection_rate)) if candidates else 0
-        chosen = random.sample(candidates, n_inject) if n_inject and len(candidates) >= n_inject else candidates
+        n_inject = (
+            max(1, int(len(candidates) * self.injection_rate)) if candidates else 0
+        )
+        chosen = (
+            random.sample(candidates, n_inject)
+            if n_inject and len(candidates) >= n_inject
+            else candidates
+        )
 
         spoofed_rows = []
         for idx in chosen:
@@ -91,12 +151,20 @@ class SpoofingAttack(AttackBase):
                     else:
                         # choose a mid-range guess if no original: use offset
                         new_phys = an.offset
-                    new_raw = int(round((new_phys - an.offset) / an.scale)) if an.scale != 0 else 0
+                    new_raw = (
+                        int(round((new_phys - an.offset) / an.scale))
+                        if an.scale != 0
+                        else 0
+                    )
                 else:
                     # digital or unknown: pick a different defined digital value if available
                     new_raw = None
                     with get_session() as s:
-                        choices = s.exec(select(DefinedDigitalValues).where(DefinedDigitalValues.spn_id == spn_def.id)).all()
+                        choices = s.exec(
+                            select(DefinedDigitalValues).where(
+                                DefinedDigitalValues.spn_id == spn_def.id
+                            )
+                        ).all()
                     if choices:
                         # pick a random defined value (prefer different from original)
                         orig_raw = orig_raw if orig_raw is not None else -1
@@ -130,5 +198,9 @@ class SpoofingAttack(AttackBase):
                 df2.loc[idx, "attack_type"] = self.name
 
         if self.mode == "append" and spoofed_rows:
-            df2 = pd.concat([df2, pd.DataFrame(spoofed_rows)], ignore_index=True).sort_values("timestamp").reset_index(drop=True)
+            df2 = (
+                pd.concat([df2, pd.DataFrame(spoofed_rows)], ignore_index=True)
+                .sort_values("timestamp")
+                .reset_index(drop=True)
+            )
         return df2
