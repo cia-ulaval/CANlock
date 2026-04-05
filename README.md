@@ -190,3 +190,15 @@ Tu peux te renseigner directement avec la [documentation qui est très bien réd
 ### Hydra & mlflow
 
 Nous verrons ces outils un peu plus tard au courant du projet, car pour l'instant ne t'embrouilles pas à apprendre d'un coup trop d'outils !
+
+## Scripts des Attaques (Attacks Scripts)
+
+Une nouvelle suite de classes a été ajoutée dans `src/canlock/attacks` pour la synthèse et l'application d'attaques CAN (Spoofing, Masquerade, Replay, Suspension). Des scripts d'exemples ont également été fournis dans le dossier `scripts/` pour te montrer comment exploiter ces classes.
+
+Pour utiliser les attaques, tu peux te référer à :
+
+1. **`scripts/attack_synthesis.py`** : Génère un ensemble de données attaqué sous forme synthétique à partir du contenu réel de la base de données.
+2. **`scripts/attack_inspect.py`** : Valide qu'un jeu de données créé est bien formé et offre un aperçu en ligne de commande de la disposition de l'attaque.
+3. **`scripts/attack_visualize.py`** : Crée des graphiques pour t'aider à visualiser chronologiquement les modifications apportées aux payloads ou aux séquences de signaux (SPN).
+
+Toutes ces commandes exploitent la librairie `click` détaillée ci-dessus. N'hésite pas à explorer le code source des fichiers `scripts/` pour comprendre l'utilisation complète de l'API des attaques.
