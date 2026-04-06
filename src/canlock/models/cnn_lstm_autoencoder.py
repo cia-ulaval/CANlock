@@ -85,7 +85,7 @@ class CnnLstmAutoencoder(pl.LightningModule):
         x_hat = self.decode(z)
         return x_hat
 
-    def _compute_loss(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tenosr:
+    def _compute_loss(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x, _ = batch  # On ignore les labels pour l'entraînement non-supervisé
         x_hat = self(x)
         loss = nn.functional.mse_loss(x_hat, x)
