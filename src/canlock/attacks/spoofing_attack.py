@@ -7,7 +7,8 @@ from typing import Optional
 import pandas as pd
 from sqlmodel import select
 
-from canlock.attacks.attack_base import AttackBase, get_spn_bits, set_spn_bits
+from canlock.attacks.attack_base import AttackBase
+from canlock.attacks.functools import get_spn_bits, set_spn_bits
 from canlock.db.database import get_session
 from canlock.db.models import DefinedDigitalValues, PgnDefinition, SpnDefinition
 from canlock.decoder import SessionDecoder
