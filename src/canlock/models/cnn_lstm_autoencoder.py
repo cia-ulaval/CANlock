@@ -105,6 +105,13 @@ class CnnLstmAutoencoder(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         return loss
 
+    def test_step(
+        self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
+        loss = self._compute_loss(batch)
+        self.log("test_loss", loss, prog_bar=True)
+        return loss
+
     def configure_optimizers(self) -> dict[str, any]:
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

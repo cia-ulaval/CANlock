@@ -4,6 +4,33 @@
     <img src="doc/images/canbus.jpg" alt="CANlock Banner" width="80%">
 </p>
 
+## Sommaire
+
+- [Fiche d'Identité](#fiche-didentité)
+- [Description du Projet](#description-du-projet)
+- [Objectifs & Livrables](#objectifs--livrables)
+- [Avancement](#avancement)
+- [Timeline Prévisionnelle de la Session](#timeline-prévisionnelle-de-la-session)
+  - [Session 1 - A25](#session-1---a25)
+  - [Session 2 - H26](#session-2---h26)
+- [Technologies & Compétences Visées](#technologies--compétences-visées)
+- [Pourquoi rejoindre ce projet ?](#pourquoi-rejoindre-ce-projet-)
+- [Contact & Liens Utiles](#contact--liens-utiles)
+- [Ressources](#ressources)
+  - [Revue de littérature](#revue-de-littérature)
+  - [Données](#données)
+    - [Chercher la dump de la base de données](#chercher-la-dump-de-la-base-de-données)
+    - [Si l'import via l'extension VS Code ne fonctionne pas](#si-limport-via-lextension-vs-code-ne-fonctionne-pas)
+    - [Ancienne méthode de téléchargement des données](#ancienne-méthode-de-téléchargement-des-données)
+- [Outils](#outils)
+  - [VS Code](#vs-code)
+  - [Git](#git)
+  - [UV](#uv)
+  - [click](#click)
+  - [Hydra & mlflow](#hydra--mlflow)
+- [Scripts des Attaques (Attacks Scripts)](#scripts-des-attaques-attacks-scripts)
+- [Entraînement des Modèles (Model Training)](#entraînement-des-modèles-model-training)
+
 ## Fiche d'Identité
 
 <p align="center" style="display: flex; align-items: center; justify-content: center;">
@@ -202,3 +229,27 @@ Pour utiliser les attaques, tu peux te référer à :
 3. **`scripts/attack_visualize.py`** : Crée des graphiques pour t'aider à visualiser chronologiquement les modifications apportées aux payloads ou aux séquences de signaux (SPN).
 
 Toutes ces commandes exploitent la librairie `click` détaillée ci-dessus. N'hésite pas à explorer le code source des fichiers `scripts/` pour comprendre l'utilisation complète de l'API des attaques.
+
+Si tu veux plus de détails sur les attaques et leurs scripts, n'hésite pas à lire la doc [`doc/attack_synthesis.md`](./doc/attack_synthesis.md).
+
+## Entraînement des Modèles (Model Training)
+
+Le script de lancement d'entraînement a été intégré directement à l'interface en ligne de commande (CLI) via l'outil `uv`. Il permet d'entraîner facilement les modèles de détection d'anomalies (CNN-LSTM ou RNN-VAE) sur les données CAN, tout en configurant dynamiquement les attaques synthétiques (Spoofing, Masquerade, Replay, Suspension) insérées dans les données d'évaluation.
+
+Pour lancer l'entraînement, il est nécessaire de préciser le type de modèle souhaité via l'argument `--model-type` (`cnn_lstm` ou `rnn_vae`).
+
+**Exemples d'utilisation :**
+
+```sh
+# Entraîner le modèle CNN-LSTM avec les paramètres par défaut
+uv run train-models --model-type cnn_lstm
+
+# Entraîner le modèle RNN-VAE en ajustant le nombre d'époques et les paramètres d'attaque
+uv run train-models --model-type rnn_vae --epochs 100 --spoof-injection-rate 0.05 --masq-prob 0.03
+```
+
+Pour consulter l'ensemble complet des hyperparamètres réseau (taille de séquence, batch size, learning rate, etc.) et des configurations d'attaque pris en charge, utilisez la commande d'aide intégrée :
+
+```sh
+uv run train-models --help
+```
