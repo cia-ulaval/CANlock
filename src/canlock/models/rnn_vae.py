@@ -112,6 +112,15 @@ class RnnVae(pl.LightningModule):
         self.log("val_kl_loss", kl_loss)
         return loss
 
+    def test_step(
+        self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
+        loss, recon_loss, kl_loss = self._compute_loss(batch)
+        self.log("test_loss", loss, prog_bar=True)
+        self.log("test_recon_loss", recon_loss)
+        self.log("test_kl_loss", kl_loss)
+        return loss
+
     def configure_optimizers(self) -> dict:
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

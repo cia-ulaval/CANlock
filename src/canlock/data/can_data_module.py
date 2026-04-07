@@ -14,6 +14,8 @@ class CANDataModule(pl.LightningDataModule):
         y_train: np.ndarray,
         y_test: np.ndarray,
         batch_size: int = 32,
+        X_val: np.ndarray = None,
+        y_val: np.ndarray = None,
     ) -> None:
         super().__init__()
         self.X_train = torch.FloatTensor(X_train)
@@ -21,6 +23,14 @@ class CANDataModule(pl.LightningDataModule):
         self.y_train = torch.LongTensor(y_train)
         self.y_test = torch.LongTensor(y_test)
         self.batch_size = batch_size
+
+        # Validation set séparé (si fourni, sinon utilise X_test)
+        if X_val is not None and y_val is not None:
+            self.X_val = torch.FloatTensor(X_val)
+            self.y_val = torch.LongTensor(y_val)
+        else:
+            self.X_val = self.X_test
+            self.y_val = self.y_test
 
     def train_dataloader(self) -> DataLoader:
         # Entraînement uniquement sur les données normales
@@ -33,8 +43,8 @@ class CANDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        # Validation sur toutes les données (pour monitorer la reconstruction)
-        val_dataset = TensorDataset(self.X_test, self.y_test)
+        # Validation sur le set de validation dédié
+        val_dataset = TensorDataset(self.X_val, self.y_val)
         return DataLoader(val_dataset, batch_size=self.batch_size, num_workers=0)
 
     def test_dataloader(self) -> DataLoader:
