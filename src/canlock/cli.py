@@ -5,6 +5,7 @@ import click
 from click import Path as ClickPath
 
 from canlock.data.download_heavy_duty_truck_data import run as heavy_truck_data_run
+from canlock.training.train_models import train as train_models_command
 
 logging.basicConfig(
     level=logging.INFO,

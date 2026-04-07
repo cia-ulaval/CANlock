@@ -31,6 +31,7 @@ dependencies = [
 canlock = "canlock.cli:main"
 download-heavy-truck-data = "canlock.cli:download_heavy_truck_data"
 analyze-session = "canlock.cli:analyze_session"
+train-models = "canlock.cli:train_models_command"
 
 
 [build-system]
