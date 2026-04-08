@@ -27,7 +27,8 @@ class AnomalyDetector:
         with torch.no_grad():
             for batch_x, batch_y in self.datamodule.test_dataloader():
                 batch_x = batch_x.to(self.device)
-                x_hat = self.model(batch_x)
+                output = self.model(batch_x)
+                x_hat = output[0] if isinstance(output, tuple) else output
                 mse = torch.mean((batch_x - x_hat) ** 2, dim=(1, 2))
                 reconstruction_errors.extend(mse.cpu().numpy())
                 all_targets.extend(batch_y.numpy())
@@ -53,6 +54,24 @@ class AnomalyDetector:
             thresholds[optimal_idx] if optimal_idx < len(thresholds) else thresholds[-1]
         )
         return optimal_threshold, f1_scores[optimal_idx]
+
+    def find_threshold_for_recall(
+        self, errors: np.ndarray, targets: np.ndarray, target_recall: float = 0.99
+    ) -> tuple[float, float]:
+        """Trouve le seuil le plus élevé garantissant au moins target_recall."""
+        if len(np.unique(targets)) < 2:
+            raise ValueError(
+                "targets must contain at least two classes to compute a threshold"
+            )
+        precision, recall, thresholds = precision_recall_curve(targets, errors)
+        # recall est décroissant dans precision_recall_curve
+        # On cherche le plus grand seuil où recall >= target_recall
+        valid = recall[:-1] >= target_recall
+        if not np.any(valid):
+            # Impossible d'atteindre le recall cible, prendre le seuil le plus bas
+            return float(thresholds[0]), float(recall[0])
+        idx = np.where(valid)[0][-1]
+        return float(thresholds[idx]), float(recall[idx])
 
     def evaluate(
         self, errors: np.ndarray, targets: np.ndarray, threshold: float
