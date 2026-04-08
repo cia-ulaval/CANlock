@@ -13,9 +13,9 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import MLFlowLogger
 from sklearn.preprocessing import StandardScaler
 from sqlmodel import select
-from tqdm import tqdm
 
 # Ignorer certains warnings
 warnings.filterwarnings("ignore")
@@ -27,73 +27,59 @@ from canlock.attacks.spoofing_attack import SpoofingAttack
 from canlock.attacks.suspension_attack import SuspensionAttack
 from canlock.data.can_data_module import CANDataModule
 from canlock.db.database import get_session, init_db
-from canlock.db.models import CanMessage, PgnDefinition, SpnDefinition
-from canlock.decoder import SessionDecoder
+from canlock.db.models import CanMessage
+from canlock.models.anomaly_detector import AnomalyDetector
 from canlock.models.cnn_lstm_autoencoder import CnnLstmAutoencoder
 from canlock.models.rnn_vae import RnnVae
 
 
-def decode_raw_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def payload_to_features(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """
-    Décode un DataFrame de messages CAN bruts en valeurs SPN.
-    Préserve la colonne attack_type si présente.
+    Convertit les messages CAN bruts en features numériques.
+    Chaque message → [can_id, byte_0..byte_7, delta_t, freq] = 11 features.
+    - can_id : identifiant CAN
+    - byte_0..byte_7 : octets du payload
+    - delta_t : temps écoulé depuis le dernier message (secondes)
+    - freq : nombre de messages avec le même CAN ID dans une fenêtre glissante
+    Retourne (features, labels) où label=1 si attack_type != "normal".
     """
-    with get_session() as session:
-        decoder = SessionDecoder(db=session)
+    # Pré-calculer les delta timestamps
+    timestamps = df["timestamp"].values
+    can_ids = df["can_identifier"].values
 
-        # Construire le cache PGN/SPN
-        pgn_cache = {}
-        decoded_rows = []
+    # Delta timestamp : temps depuis le message précédent
+    delta_ts = np.zeros(len(df))
+    delta_ts[1:] = np.diff(timestamps.astype(np.float64) / 1e9)  # en secondes
+    delta_ts[0] = 0.0
+    # Clipper les outliers au 99e percentile
+    delta_ts = np.clip(delta_ts, 0, np.percentile(delta_ts, 99))
 
-        for _, msg in tqdm(df.iterrows(), total=len(df), desc="Décodage"):
-            if msg.get("can_identifier") is None or msg.get("payload") is None:
-                continue
-            if pd.isna(msg["can_identifier"]) or pd.isna(msg.get("payload", None)):
-                continue
+    # Fréquence par CAN ID : compteur glissant sur les 50 derniers messages
+    FREQ_WINDOW = 50
+    freq = np.zeros(len(df))
+    for i in range(len(df)):
+        start = max(0, i - FREQ_WINDOW)
+        freq[i] = np.sum(can_ids[start:i + 1] == can_ids[i])
+    freq = np.clip(freq, 0, np.percentile(freq, 99))
 
-            try:
-                payload = (
-                    bytes(msg["payload"])
-                    if not isinstance(msg["payload"], bytes)
-                    else msg["payload"]
-                )
-            except (TypeError, ValueError):
-                continue
-
-            pgn_number = SessionDecoder.extract_pgn_number_from_payload(
-                int(msg["can_identifier"])
+    rows = []
+    labels = []
+    for idx, (_, msg) in enumerate(df.iterrows()):
+        if msg.get("payload") is None:
+            continue
+        try:
+            payload = (
+                bytes(msg["payload"])
+                if not isinstance(msg["payload"], bytes)
+                else msg["payload"]
             )
-
-            if pgn_number not in pgn_cache:
-                pgn_def = session.exec(
-                    select(PgnDefinition).where(
-                        PgnDefinition.pgn_identifier == pgn_number
-                    )
-                ).first()
-
-                if pgn_def:
-                    spns = session.exec(
-                        select(SpnDefinition).where(SpnDefinition.pgn_id == pgn_def.id)
-                    ).all()
-                    pgn_cache[pgn_number] = [
-                        (spn, spn.analog_attributes) for spn in spns
-                    ]
-                else:
-                    pgn_cache[pgn_number] = None
-
-            spn_rules = pgn_cache[pgn_number]
-            if spn_rules:
-                spns = [s[0] for s in spn_rules]
-                analog_attrs = [s[1] for s in spn_rules]
-                values = decoder.extract_values_from_spns(spns, analog_attrs, payload)
-                if values:
-                    row = {"timestamp": msg["timestamp"]}
-                    row.update(values)
-                    if "attack_type" in msg:
-                        row["attack_type"] = msg["attack_type"]
-                    decoded_rows.append(row)
-
-    return pd.DataFrame(decoded_rows)
+        except (TypeError, ValueError):
+            continue
+        payload_bytes = list(payload[:8]) + [0] * max(0, 8 - len(payload))
+        row = [int(msg["can_identifier"])] + payload_bytes + [delta_ts[idx], freq[idx]]
+        rows.append(row)
+        labels.append(0 if msg.get("attack_type", "normal") == "normal" else 1)
+    return np.array(rows, dtype=np.float64), np.array(labels, dtype=np.int64)
 
 
 def create_sequences_with_labels(data, labels, seq_len, stride):
@@ -259,6 +245,25 @@ def create_sequences(data, seq_len, stride):
     default=0.0001,
     help="Intervalle pour DDoSAttack",
 )
+# MLflow options
+@click.option(
+    "--mlflow-tracking-uri",
+    type=str,
+    default="http://localhost:5050",
+    help="URI du serveur MLflow (défaut: http://localhost:5050)",
+)
+@click.option(
+    "--mlflow-experiment",
+    type=str,
+    default=None,
+    help="Nom de l'expérience MLflow (défaut: nom du modèle)",
+)
+@click.option(
+    "--target-recall",
+    type=float,
+    default=None,
+    help="Recall cible pour le seuil de détection (ex: 0.99). Si omis, optimise le F1.",
+)
 def train(
     model_type: str,
     limit: int,
@@ -285,6 +290,9 @@ def train(
     susp_recovery_delay_s: float,
     ddos_repetitions: int,
     ddos_interval: float,
+    mlflow_tracking_uri: str,
+    mlflow_experiment: str | None,
+    target_recall: float | None,
 ) -> None:
     """Script de lancement d'entraînement des modèles de détection d'anomalies CANlock."""
 
@@ -319,14 +327,19 @@ def train(
     )
     click.echo(f"[+] Messages bruts chargés : {len(df_raw_messages)}")
 
-    # 2. Partitionnement des données (Train/Valid = Normal SEULEMENT, Test = Attaques + Normal)
+    # 2. Split temporel des messages bruts (80% train+val / 20% test)
     split_idx = int(len(df_raw_messages) * 0.8)
-    df_train_valid_raw = df_raw_messages.iloc[:split_idx].copy()
+    df_train_val_raw = df_raw_messages.iloc[:split_idx].copy()
     df_test_raw = df_raw_messages.iloc[split_idx:].copy()
 
-    df_train_valid_raw["attack_type"] = "normal"
+    df_train_val_raw["attack_type"] = "normal"
     df_test_raw["attack_type"] = "normal"
 
+    click.echo(
+        f"[+] Split temporel : {len(df_train_val_raw)} train+val / {len(df_test_raw)} test"
+    )
+
+    # 3. Génération des attaques sur la portion test uniquement
     click.echo(
         "[*] Génération des attaques synthétiques (spoofing, masquerade, replay, suspension, ddos) sur le set de test..."
     )
@@ -362,76 +375,67 @@ def train(
     df_attacked = masq.apply(df_attacked, target=None)
     df_attacked = replay.apply(df_attacked, target=None)
     df_attacked = susp.apply(df_attacked, target=None)
-    
     df_attacked = ddos.apply(df_attacked, target=None)
     df_attacked["attack_type"] = df_attacked["attack_type"].fillna("DDoS")
 
     df_attacked = df_attacked.sort_values("timestamp").reset_index(drop=True)
     click.echo(f"[+] Messages de test après attaques : {len(df_attacked)}")
 
-    # 3. Décodage en SPN
-    click.echo("[*] Décodage des messages d'entraînement normaux en valeurs SPN...")
-    df_normal_decoded = decode_raw_dataframe(df_train_valid_raw)
+    # 4. Extraction des features depuis les payloads bruts
+    click.echo("[*] Extraction des features depuis les payloads bruts (CAN ID + 8 octets)...")
+    normal_features, normal_labels_raw = payload_to_features(df_train_val_raw)
+    attacked_features, attacked_labels = payload_to_features(df_attacked)
+    click.echo(f"[+] Features normales : {normal_features.shape} ({normal_features.shape[1]} features)")
+    click.echo(f"[+] Features attaquées : {attacked_features.shape}")
 
-    click.echo("[*] Décodage des messages de test (avec attaques) en valeurs SPN...")
-    df_attacked_decoded = decode_raw_dataframe(df_attacked)
-
-    # 4. Sélection des colonnes SPN communes et nettoyage
-    meta_cols = {"timestamp", "attack_type"}
-    normal_spn_cols = set(df_normal_decoded.columns) - meta_cols
-    attacked_spn_cols = set(df_attacked_decoded.columns) - meta_cols
-    common_cols = sorted(normal_spn_cols & attacked_spn_cols)
-
-    # Sélection des 15 meilleures colonnes par taux de remplissage
-    fill_rates = (
-        df_normal_decoded[common_cols].notna().mean().sort_values(ascending=False)
-    )
-    top_cols = fill_rates.head(15).index.tolist()
-    click.echo(f"[+] 15 colonnes SPN retenues : {len(top_cols)}")
-
-    df_normal_clean = df_normal_decoded[top_cols].ffill().bfill().dropna()
-    df_attacked_clean = df_attacked_decoded[top_cols + ["attack_type"]].copy()
-    df_attacked_clean[top_cols] = df_attacked_clean[top_cols].ffill().bfill()
-    df_attacked_clean = df_attacked_clean.dropna(subset=top_cols)
-
-    # 5. Normalisation et création de séquences
+    # 5. Normalisation
     scaler = StandardScaler()
-    normal_scaled = scaler.fit_transform(df_normal_clean.values)
-    attacked_scaled = scaler.transform(df_attacked_clean[top_cols].values)
+    normal_scaled = scaler.fit_transform(normal_features)
+    attacked_scaled = scaler.transform(attacked_features)
 
-    attacked_labels = (df_attacked_clean["attack_type"] != "normal").astype(int).values
+    # 6. Création de séquences
+    normal_sequences = create_sequences(normal_scaled, seq_len=seq_len, stride=stride)
+    normal_labels = np.zeros(len(normal_sequences), dtype=np.int64)
 
-    X_train_valid = create_sequences(normal_scaled, seq_len=seq_len, stride=stride)
-    y_train_valid = np.zeros(len(X_train_valid), dtype=np.int64)
-
-    # Split Train / Valid (80/20 of the normal sequences)
-    n_train_seqs = int(len(X_train_valid) * 0.8)
-    X_train_full = X_train_valid[:n_train_seqs]
-    y_train_full = y_train_valid[:n_train_seqs]
-    X_val_full = X_train_valid[n_train_seqs:]
-    y_val_full = y_train_valid[n_train_seqs:]
-
-    # Validation / Test part
-    X_test_full, y_test_full = create_sequences_with_labels(
+    # Séquences attaquées (test)
+    attacked_sequences, attacked_seq_labels = create_sequences_with_labels(
         attacked_scaled, attacked_labels, seq_len=seq_len, stride=stride
     )
 
-    click.echo(f"[+] Séquences d'entraînement (normales) : {X_train_full.shape}")
-    click.echo(f"[+] Séquences de validation (normales) : {X_val_full.shape}")
-    click.echo(f"[+] Séquences de test (avec anomalies) : {X_test_full.shape}")
+    # 7. Split séquentiel : 75% train / 15% val / 10% test-normal
+    n_train = int(len(normal_sequences) * 0.75)
+    n_val = int(len(normal_sequences) * 0.15)
+    X_train = normal_sequences[:n_train]
+    y_train = normal_labels[:n_train]
+    X_val = normal_sequences[n_train : n_train + n_val]
+    y_val = normal_labels[n_train : n_train + n_val]
 
-    # 6. DataModule et Modèle
-    datamodule = CANDataModule(
-        X_train=X_train_full,
-        X_test=X_test_full,
-        y_train=y_train_full,
-        y_test=y_test_full,
-        batch_size=batch_size,
-        X_val=X_val_full,
-        y_val=y_val_full,
+    # Test = normales restantes (10%) + toutes les attaques
+    # → normales pour mesurer faux positifs, attaques pour vrais positifs
+    X_test_normal = normal_sequences[n_train + n_val :]
+    y_test_normal = normal_labels[n_train + n_val :]
+    X_test = np.concatenate([X_test_normal, attacked_sequences], axis=0)
+    y_test = np.concatenate([y_test_normal, attacked_seq_labels], axis=0)
+
+    click.echo(f"[+] Séquences d'entraînement (normales) : {X_train.shape}")
+    click.echo(f"[+] Séquences de validation (normales) : {X_val.shape}")
+    click.echo(
+        f"[+] Séquences de test : {X_test.shape} "
+        f"({(y_test == 0).sum()} normales, {(y_test == 1).sum()} anomalies)"
     )
 
-    n_features = X_train_full.shape[2]
+    # 8. DataModule et Modèle
+    datamodule = CANDataModule(
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+        batch_size=batch_size,
+        X_val=X_val,
+        y_val=y_val,
+    )
+
+    n_features = X_train.shape[2]
 
     if model_type == "cnn_lstm":
         model = CnnLstmAutoencoder(n_features=n_features, seq_len=seq_len, lr=lr)
@@ -440,7 +444,15 @@ def train(
         model = RnnVae(n_features=n_features, seq_len=seq_len, lr=lr, kl_weight=1e-3)
         monitor_metric = "val_loss"
 
-    # 7. Entraînement
+    # 9. MLflow Logger
+    experiment_name = mlflow_experiment or model_type
+    mlflow_logger = MLFlowLogger(
+        experiment_name=experiment_name,
+        tracking_uri=mlflow_tracking_uri,
+    )
+    click.echo(f"[*] MLflow tracking : {mlflow_tracking_uri} (expérience: {experiment_name})")
+
+    # 10. Entraînement
     checkpoint_callback = ModelCheckpoint(
         dirpath=save_dir,
         filename=f"{model_type}-{{epoch:02d}}-{{{monitor_metric}:.2f}}",
@@ -450,7 +462,7 @@ def train(
     )
 
     early_stop_callback = EarlyStopping(
-        monitor=monitor_metric, min_delta=0.00, patience=10, verbose=True, mode="min"
+        monitor=monitor_metric, min_delta=0.00, patience=20, verbose=True, mode="min"
     )
 
     trainer = pl.Trainer(
@@ -459,6 +471,8 @@ def train(
         accelerator="auto",
         devices=1,
         enable_progress_bar=True,
+        logger=mlflow_logger,
+        gradient_clip_val=1.0,
     )
 
     click.echo(f"[*] Démarrage de l'entraînement du modèle '{model_type}'...")
@@ -466,6 +480,33 @@ def train(
 
     click.echo("[*] Démarrage de la phase de test avec attaques (sur le dataset de test)...")
     trainer.test(model, datamodule=datamodule)
+
+    # 11. Évaluation : détection d'anomalies
+    click.echo("[*] Évaluation de la détection d'anomalies (seuil optimal, métriques)...")
+    detector = AnomalyDetector(model=model, datamodule=datamodule, device=str(device))
+    errors, targets = detector.compute_reconstruction_errors()
+
+    # Seuil F1-optimal
+    threshold_f1, best_f1 = detector.find_optimal_threshold(errors, targets)
+    results_f1 = detector.evaluate(errors, targets, threshold_f1)
+
+    click.echo(f"[+] === Seuil F1-optimal : {threshold_f1:.6f} (F1={best_f1:.4f}) ===")
+    click.echo(f"[+] ROC-AUC : {results_f1['auc']:.4f}")
+    click.echo(f"[+] Matrice de confusion : TP={results_f1['tp']} FP={results_f1['fp']} TN={results_f1['tn']} FN={results_f1['fn']}")
+    click.echo(f"[+] FPR={results_f1['fpr']:.4f}  Recall={results_f1['recall']:.4f}")
+    click.echo(results_f1["classification_report"])
+
+    # Seuil recall-cible (si demandé)
+    if target_recall is not None:
+        threshold_recall, actual_recall = detector.find_threshold_for_recall(
+            errors, targets, target_recall
+        )
+        results_recall = detector.evaluate(errors, targets, threshold_recall)
+
+        click.echo(f"[+] === Seuil recall>={target_recall} : {threshold_recall:.6f} ===")
+        click.echo(f"[+] Matrice de confusion : TP={results_recall['tp']} FP={results_recall['fp']} TN={results_recall['tn']} FN={results_recall['fn']}")
+        click.echo(f"[+] FPR={results_recall['fpr']:.4f}  Recall={results_recall['recall']:.4f}")
+        click.echo(results_recall["classification_report"])
 
     click.echo(
         f"[+] Entraînement et test terminés. Le meilleur modèle est à : {checkpoint_callback.best_model_path}"

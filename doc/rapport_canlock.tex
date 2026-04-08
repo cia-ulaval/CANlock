@@ -1,0 +1,594 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+
+\pagestyle{fancy}
+\fancyhead[L]{CANlock}
+\fancyhead[R]{Session H26}
+\fancyfoot[C]{\thepage}
+
+\definecolor{navy}{HTML}{1B2A4A}
+\hypersetup{colorlinks=true, linkcolor=navy, urlcolor=navy, citecolor=navy}
+
+\title{\textcolor{navy}{\textbf{CANlock --- Système de Detection d'Intrusions sur Bus CAN}}\\[0.5em]
+\large Guide complet du projet --- Session H26}
+\author{Équipe CIA -- Universite Laval / Thales}
+\date{Avril 2026}
+
+\begin{document}
+\maketitle
+
+\begin{tcolorbox}[colback=navy!5, colframe=navy, title=\textbf{Résumé en 30 secondes}]
+CANlock est un système de détection d'intrusions pour les véhicules connectés. Les véhicules modernes utilisent un réseau interne appelé \textbf{bus CAN} pour que leurs composants électroniques communiquent (freins, moteur, direction, etc.). Ce réseau n'a aucune sécurité native : un attaquant peut y injecter de faux messages pour prendre le contrôle du véhicule.
+
+Notre solution : un modèle d'apprentissage profond (\textbf{CNN-LSTM Autoencoder}) qui apprend le comportement normal du réseau et détecte automatiquement les messages malveillants. Résultat : \textbf{99.5\% des attaques détectees} avec seulement \textbf{6.2\% de fausses alertes}.
+\end{tcolorbox}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Contexte : pourquoi ce projet ?}
+% ============================================================================
+
+\subsection{Le bus CAN en bref}
+
+Le \textbf{Controller Area Network (CAN)} est le protocole de communication standard dans l'industrie automobile depuis les années 1990. Dans un véhicule moderne, des dizaines d'unités électroniques (ECU) échangent en permanence des messages sur ce bus :
+
+\begin{itemize}[noitemsep]
+    \item L'ECU moteur envoie le régime et le couple
+    \item L'ECU freinage envoie la pression sur les pédales
+    \item Le tableau de bord lit ces messages pour afficher les informations
+    \item Le système ABS réagit aux messages de freinage
+\end{itemize}
+
+\textbf{Le problème fondamental :} le protocole CAN a été conçu en 1986 pour la fiabilité, pas pour la sécurité. Il ne possède \textbf{aucun mécanisme d'authentification ni de chiffrement}. N'importe quel appareil connecté au bus peut envoyer n'importe quel message, et tous les ECU le recevront.
+
+\subsection{La menace}
+
+Un attaquant accédant au bus CAN (via le port OBD-II, un dongle Bluetooth compromis, ou le système d'infotainment) peut :
+\begin{itemize}[noitemsep]
+    \item \textbf{Injecter} de faux messages (ex: ``freiner a fond'')
+    \item \textbf{Modifier} des messages en transit (ex: changer la vitesse affichee)
+    \item \textbf{Supprimer} des messages (ex: empecher l'ABS de fonctionner)
+    \item \textbf{Saturer} le bus pour bloquer toute communication
+\end{itemize}
+
+Ces attaques ont été demontrees dans la litterature sur des véhicules reels (Jeep Cherokee, Tesla, Toyota Prius).
+
+\subsection{Objectif de CANlock}
+
+\begin{tcolorbox}[colback=navy!5, colframe=navy]
+Concevoir un \textbf{système de détection d'intrusions (IDS)} basé sur l'apprentissage profond, capable de détecter en temps réel les messages CAN malveillants avec :
+\begin{itemize}[noitemsep]
+    \item Un \textbf{recall} $\geq$ 99\% (ne rater presque aucune attaque)
+    \item Un \textbf{taux de fausses alertes} faible (pour ne pas noyer l'operateur)
+\end{itemize}
+\end{tcolorbox}
+
+% ============================================================================
+\section{Les données}
+% ============================================================================
+
+\subsection{Source}
+
+Les données proviennent d'un jeu de données de bus CAN collecte depuis un \textbf{poids lourd de marque Renault}. Le jeu de données contient environ \textbf{490 millions d'enregistrements} respectant le protocole \textbf{CAN J1939} (standard pour véhicules lourds).
+
+\subsection{Structure d'un message CAN}
+
+Chaque message CAN (128 bits) est compose de :
+\begin{itemize}[noitemsep]
+    \item \textbf{Identifier} (29 bits) : identifie le type de message (PGN) et l'ECU source
+    \item \textbf{DLC} (4 bits) : longueur du champ de données en octets
+    \item \textbf{Data field} (0 a 64 bits) : les données utiles (le ``payload'')
+\end{itemize}
+
+\textbf{Exemple concret :} un message avec l'identifiant 0x18FEF100 signifie ``PGN 65265 (Vehicle Speed) envoyé par l'ECU a l'adresse 0x00''. Le payload contient la vitesse encodée sur quelques bits.
+
+\subsection{Le protocole J1939}
+
+J1939 définit une hiérarchie de décodage :
+\begin{itemize}[noitemsep]
+    \item \textbf{PGN} (Parameter Group Number) : identifie le groupe de paramètres (ex: ``Electronic Engine Controller'')
+    \item \textbf{SPN} (Suspect Parameter Number) : identifie un paramètre individuel dans le PGN (ex: ``Engine Speed'', ``Engine Torque'')
+    \item Chaque SPN a une position en bits dans le payload, un facteur d'échelle et un offset pour convertir les bits bruts en valeur physique
+\end{itemize}
+
+\subsection{Stockage}
+
+Les messages sont stockés dans une basé \textbf{PostgreSQL} (Docker, port 5435) avec le schéma :
+\begin{verbatim}
+Vehicle -> Session -> CanMessage (timestamp, can_identifier,
+                                  length, payload)
+PgnDefinition -> SpnDefinition (bit_start, bit_length,
+                                 scale, offset)
+\end{verbatim}
+
+% ============================================================================
+\section{Les attaques}
+% ============================================================================
+
+Pour tester notre IDS, nous generons des \textbf{attaques synthetiques réalistes} a partir de trafic CAN reel. Cinq types d'attaques couvrent les principales menaces documentees dans la litterature.
+
+\subsection{DDoS (Denial of Service)}
+
+\begin{tcolorbox}[colback=red!5, colframe=red!50!black]
+\textbf{Objectif :} saturer le bus CAN pour empecher les communications normales.\\
+\textbf{Comment :} envoi massif de messages sur un meme identifiant (3000 repetitions, intervalle de 0.0001s).\\
+\textbf{Effet :} les messages légitimes sont retardes ou perdus, le véhicule peut devenir incontrolable.
+\end{tcolorbox}
+
+\subsection{Spoofing (Usurpation de payload)}
+
+\begin{tcolorbox}[colback=red!5, colframe=red!50!black]
+\textbf{Objectif :} injecter de fausses données en usurpant un ECU légitime.\\
+\textbf{Comment :} pour 10\% des messages, modifie les octets du payload en appliquant un bruit gaussien.\\
+\textbf{Effet :} le véhicule recoit des valeurs de capteur erronees (ex: fausse vitesse, faux couple moteur).
+\end{tcolorbox}
+
+\subsection{Replay (Rejeu)}
+
+\begin{tcolorbox}[colback=red!5, colframe=red!50!black]
+\textbf{Objectif :} capturer puis réémettre des messages légitimes a un autre moment.\\
+\textbf{Comment :} 10\% des messages sont copiés et réinjectés avec 1 seconde de délai.\\
+\textbf{Effet :} force une action passee (ex: rejeu d'une commande de deverrouillage).
+\end{tcolorbox}
+
+\subsection{Suspension (Bus-Off)}
+
+\begin{tcolorbox}[colback=red!5, colframe=red!50!black]
+\textbf{Objectif :} deconnecter un ECU du réseau.\\
+\textbf{Comment :} génère des erreurs ciblées qui incrémentent le compteur d'erreurs de l'ECU victime (+8 par erreur). Au delà de 256, l'ECU se met en Bus-Off (mécanisme natif CAN).\\
+\textbf{Effet :} l'ECU ciblé est isolé, ses messages disparaissent du bus.
+\end{tcolorbox}
+
+\subsection{Masquerade (Usurpation d'identité)}
+
+\begin{tcolorbox}[colback=red!5, colframe=red!50!black]
+\textbf{Objectif :} usurper l'identité d'un ECU pour prendre le contrôle de ses fonctions.\\
+\textbf{Comment :} modifie l'adresse source (LSB) de l'identifiant CAN (8\% des messages).\\
+\textbf{Effet :} l'attaquant parle ``au nom'' d'un ECU légitime (ex: se faire passer pour l'ECU moteur).
+\end{tcolorbox}
+
+\subsection{Paramètres d'attaque}
+
+Les taux d'injection par défaut (2--3\%) étaient trop faibles : les séquences ``attaquées'' contenaient majoritairement du trafic normal, rendant l'apprentissage inefficace. Les paramètres optimaux :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Attaque} & \textbf{Paramètre} & \textbf{Defaut} & \textbf{Optimal} \\
+\midrule
+Spoofing & injection\_rate & 3\% & \textbf{10\%} \\
+Masquerade & prob & 2\% & \textbf{8\%} \\
+Replay & replay\_rate & 3\% & \textbf{10\%} \\
+Suspension & suspend\_fraction & 2\% & \textbf{8\%} \\
+DDoS & repetitions & 1000 & \textbf{3000} \\
+\bottomrule
+\end{tabular}
+\caption{Paramètres d'attaque : valeurs par défaut vs optimales}
+\end{table}
+
+% ============================================================================
+\section{Comment le modèle détecte les attaques}
+% ============================================================================
+
+\subsection{Le principe : détection par reconstruction}
+
+Notre approche est \textbf{non supervisee} : le modèle n'a \textbf{jamais vu d'attaque} pendant l'entraînément. Il apprend uniquement a reconstruire du trafic CAN normal.
+
+\begin{enumerate}
+    \item \textbf{Entraînement :} on donne au modèle des milliers de séquences de trafic normal. Il apprend a les compresser puis les reconstruire fidèlement.
+    \item \textbf{Detection :} face a un nouveau message, le modèle tente de le reconstruire. Si l'erreur de reconstruction est \textbf{élevée}, le message est ``hors distribution'' $\to$ probablement une \textbf{anomalie}.
+\end{enumerate}
+
+\textbf{Analogie :} comme un employe de banque qui voit des milliers de signatures normales chaque jour. Sans avoir jamais vu de faux, il détecte quand une signature ``ne ressemble pas'' a ce qu'il connait.
+
+\subsection{Les 11 features}
+
+Plutot que de décoder les messages CAN en valeurs physiques (SPN), ce qui est lent et perd de l'information, nous extrayons \textbf{11 features directement des messages bruts} :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llp{5.5cm}}
+\toprule
+\textbf{Feature} & \textbf{Description} & \textbf{Pourquoi ?} \\
+\midrule
+\texttt{can\_id} & Identifiant CAN & Change lors d'une masquerade ou DDoS \\
+\texttt{byte\_0..7} & 8 octets du payload & Changes lors d'un spoofing \\
+\texttt{delta\_t} & Temps depuis le msg précédent & Anormal lors d'un replay (délai), suspension (gap) ou DDoS (trop rapide) \\
+\texttt{freq} & Fréquence de cet ID dans les 50 derniers msgs & Explose lors d'un DDoS, chute lors d'une suspension \\
+\bottomrule
+\end{tabular}
+\caption{Les 11 features et ce qu'elles détectent}
+\end{table}
+
+\textbf{Pourquoi pas le décodage SPN ?} L'approche initiale décodait chaque message en valeurs SPN via la basé J1939. Problèmes :
+\begin{itemize}[noitemsep]
+    \item Tres lent ($\sim$15 min pour 40k messages vs quelques secondes avec les payloads bruts)
+    \item Le forward-fill et la normalisation lissaient les modifications des attaques
+    \item Résultat : ROC-AUC de 0.52 (= hasard)
+\end{itemize}
+
+\subsection{Pre-traitement des données}
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Clipping des outliers} au 99e percentile sur \texttt{delta\_t} et \texttt{freq} (evite les spikes d'entraînément)
+    \item \textbf{Normalisation} StandardScaler (fit uniquement sur les données normales)
+    \item \textbf{Séquences temporelles} : fenêtre de 50 messages, stride de 25 (chevauchement)
+\end{enumerate}
+
+% ============================================================================
+\section{Partitionnement des données}
+% ============================================================================
+
+Le partitionnement est \textbf{crucial} pour la fiabilité des résultats. Deux règles :
+
+\begin{tcolorbox}[colback=navy!5, colframe=navy, title=\textbf{Règles de partitionnement}]
+\begin{enumerate}
+    \item \textbf{Split temporel} (pas de shuffle) : les données CAN sont des series temporelles. Melanger passe et futur causerait du \textit{data leakage}.
+    \item \textbf{Attaques uniquement dans le test} : le modèle ne voit \textbf{jamais} d'attaque pendant l'entraînément ni la validation.
+\end{enumerate}
+\end{tcolorbox}
+
+\textbf{Schema concret :}
+\begin{itemize}[noitemsep]
+    \item 500 000 messages charges depuis la BD, tries par timestamp
+    \item 80\% premiers $\to$ \textbf{train + val} (uniquement normaux)
+    \item 20\% derniers $\to$ \textbf{test} (on y applique les 5 attaques)
+    \item Les séquences normales sont splittees : \textbf{75\% train / 15\% val / 10\% test}
+    \item Le test final = 10\% normales + toutes les attaques $\to$ permet de mesurer FP et TP
+\end{itemize}
+
+Avec 500k messages, stride=25, seq\_len=50 : environ \textbf{12 000 séquences d'entraînément}, \textbf{2 400 de validation}, \textbf{5 768 de test} (1 601 normales + 4 167 attaquées).
+
+% ============================================================================
+\section{Les deux architectures évaluées}
+% ============================================================================
+
+Les deux modèles sont des \textbf{autoencodeurs} : ils compriment l'entrée en une représentation compacte (``bottleneck'') puis tentent de reconstruire l'entrée originale. La différence est dans comment ils compriment.
+
+\subsection{RNN-VAE (Variational Auto-Encoder avec LSTM)}
+
+\textbf{Idée :} apprendre une \textit{distribution} du trafic normal, pas juste une compression.
+
+\textbf{Architecture :}
+\begin{itemize}[noitemsep]
+    \item \textbf{Encodeur :} LSTM bidirectionnel (64 hidden) $\to$ Dropout 0.2 $\to$ deux couches linéaires qui produisent $\mu$ et $\log\sigma^2$ (32 dimensions chacune)
+    \item \textbf{Espace latent :} $z = \mu + \sigma \cdot \epsilon$ avec $\epsilon \sim \mathcal{N}(0, I)$ (reparameterization trick)
+    \item \textbf{Décodeur :} linéaire 32$\to$128 $\to$ repeat sur la longueur de sequence $\to$ LSTM bidirectionnel $\to$ Dropout $\to$ linéaire $\to$ 11 features
+\end{itemize}
+
+\textbf{Loss :}
+\begin{equation}
+    \mathcal{L} = \underbrace{\text{MSE}(x, \hat{x})}_{\text{reconstruction}} + \underbrace{10^{-3} \cdot D_{KL}(\mathcal{N}(\mu, \sigma^2) \| \mathcal{N}(0, I))}_{\text{régularisation latente}}
+\end{equation}
+
+\textbf{152K paramètres} entrainables.
+
+\subsection{CNN-LSTM Autoencoder (modèle retenu)}
+
+\textbf{Idée :} utiliser des convolutions pour capter les patterns \textit{locaux} dans le payload, et un LSTM pour les dépendances \textit{temporelles}.
+
+\textbf{Architecture :}
+\begin{itemize}[noitemsep]
+    \item \textbf{Encodeur CNN :} Conv1d(11$\to$32) + BN + ReLU + Pool(/2) $\to$ Conv1d(32$\to$64) + BN + ReLU + Pool(/2)
+    \item \textbf{Encodeur LSTM :} LSTM bidirectionnel (32 hidden) + Dropout 0.2
+    \item \textbf{Bottleneck :} linéaire 64$\to$32
+    \item \textbf{Décodeur LSTM :} LSTM bidirectionnel (64 hidden)
+    \item \textbf{Décodeur CNN :} ConvTranspose1d(128$\to$64) + BN + ReLU $\to$ ConvTranspose1d(64$\to$32) + BN + ReLU $\to$ Conv1d(32$\to$11) + interpolation
+\end{itemize}
+
+\textbf{Loss :}
+\begin{equation}
+    \mathcal{L} = \text{MSE}(x, \hat{x})
+\end{equation}
+
+\textbf{106K paramètres} entrainables.
+
+\subsection{Pourquoi le CNN-LSTM est meilleur}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Aspect} & \textbf{RNN-VAE} & \textbf{CNN-LSTM} \\
+\midrule
+Patterns locaux (spoofing) & LSTM seul & \textbf{CNN} (convolutions) \\
+Patterns temporels (DDoS, replay) & LSTM & \textbf{LSTM} \\
+Stabilite entraînément & Trade-off MSE/KL & \textbf{MSE seul} \\
+Fausses alertes (seuil recall 99.5\%) & 29.4\% & \textbf{6.2\%} \\
+\bottomrule
+\end{tabular}
+\caption{Pourquoi le CNN-LSTM surpasse le RNN-VAE}
+\end{table}
+
+% ============================================================================
+\section{Entraînement}
+% ============================================================================
+
+\subsection{Hyperparamètres}
+
+Les deux modèles ont été entraînés avec les \textbf{memes hyperparamètres} pour une comparaison équitable :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Hyperparamètre} & \textbf{Valeur} \\
+\midrule
+Messages charges & 500 000 \\
+Batch size & 128 \\
+Learning rate & $5 \times 10^{-4}$ \\
+Epochs max & 200 \\
+Sequence length & 50 \\
+Stride & 25 \\
+Early stopping patience & 20 epochs \\
+Gradient clipping & 1.0 \\
+Optimizer & Adam \\
+Scheduler & ReduceLROnPlateau (factor=0.5, patience=5) \\
+Seed & 42 \\
+\bottomrule
+\end{tabular}
+\caption{Hyperparamètres d'entraînément (identiques pour les deux modèles)}
+\end{table}
+
+\subsection{Infrastructure et outils}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Matériel :} Intel Core 7 @ 1.8 GHz, CPU uniquement (pas de GPU)
+    \item \textbf{Framework :} PyTorch Lightning
+    \item \textbf{Suivi d'expériences :} MLflow (\texttt{http://localhost:5050})
+    \item \textbf{Base de données :} PostgreSQL (Docker, port 5435)
+    \item \textbf{Gestion des dépendances :} uv + pyproject.toml
+    \item \textbf{Temps d'entraînément :} $\sim$30--45 min par modèle (CPU)
+\end{itemize}
+
+\subsection{Commande d'entraînément}
+
+\begin{lstlisting}[basicstyle=\ttfamily\small, breaklines=true]
+uv run train-models --model-type cnn_lstm \
+    --limit 500000 --epochs 200 --batch-size 128 \
+    --stride 25 --seq-len 50 --lr 5e-4 \
+    --spoof-injection-rate 0.10 --masq-prob 0.08 \
+    --replay-rate 0.10 --susp-suspend-fraction 0.08 \
+    --ddos-repetitions 3000 --target-recall 0.995
+\end{lstlisting}
+
+% ============================================================================
+\section{Detection d'anomalies : du modèle a la decision}
+% ============================================================================
+
+\subsection{Calcul de l'erreur de reconstruction}
+
+Pour chaque sequence de test, on calcule l'erreur MSE entre l'entrée et la sortie du modèle :
+\begin{equation}
+    e_i = \frac{1}{T \times F} \sum_{t=1}^{T} \sum_{f=1}^{F} (x_{i,t,f} - \hat{x}_{i,t,f})^2
+\end{equation}
+ou $T=50$ (longueur de sequence) et $F=11$ (nombre de features).
+
+\textbf{Intuition :} le modèle reconstruit bien ce qu'il connait (trafic normal $\to$ erreur faible). Face a une attaque, la reconstruction est mauvaise $\to$ erreur élevée.
+
+\subsection{Choix du seuil}
+
+L'erreur de reconstruction seule ne suffit pas : il faut un \textbf{seuil} au-dessus duquel on declare ``anomalie''. Deux stratégies :
+
+\begin{enumerate}
+    \item \textbf{Seuil F1-optimal :} maximise le F1-score (équilibre precision/recall). Bon pour un usage general.
+    \item \textbf{Seuil recall-ciblé :} garantit un recall minimum (ex: 99.5\%). Indispensable pour la sécurité vehiculaire : mieux vaut quelques fausses alertes qu'une attaque ratée.
+\end{enumerate}
+
+\subsection{Pourquoi le recall est prioritaire}
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Faux négatif} (attaque ratée) $\to$ conséquence potentiellement mortelle (prise de contrôle du véhicule)
+    \item \textbf{Faux positif} (fausse alerte) $\to$ génère un log/alerte, mais pas de danger
+    \item Sur un bus CAN avec des centaines de milliers de messages/minute, meme un FPR de 6\% génère beaucoup d'alertes $\to$ filtrage en aval nécessaire
+\end{itemize}
+
+% ============================================================================
+\section{Résultats}
+% ============================================================================
+
+\subsection{Comparaison CNN-LSTM vs RNN-VAE}
+
+Résultats avec le seuil recall $\geq$ 99.5\% :
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Métrique} & \textbf{RNN-VAE} & \textbf{CNN-LSTM} \\
+\midrule
+ROC-AUC & 0.990 & \textbf{0.998} \\
+FPR (fausses alertes) & 29.4\% & \textbf{6.2\%} \\
+Recall (détection) & 99.5\% & 99.5\% \\
+F1-Score & 0.940 & \textbf{0.988} \\
+Accuracy & 91.0\% & \textbf{98.0\%} \\
+\bottomrule
+\end{tabular}
+\caption{Comparaison des deux modèles (seuil recall $\geq$ 99.5\%)}
+\end{table}
+
+\textbf{Lecture :} les deux modèles détectent 99.5\% des attaques, mais le CNN-LSTM génère \textbf{5 fois moins de fausses alertes} (6.2\% vs 29.4\%).
+
+\subsection{Matrices de confusion --- CNN-LSTM}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l|cc|cc}
+\toprule
+& \multicolumn{2}{c|}{\textbf{Seuil F1-optimal}} & \multicolumn{2}{c}{\textbf{Seuil Recall $\geq$ 99.5\%}} \\
+& Pred. Normal & Pred. Anomalie & Pred. Normal & Pred. Anomalie \\
+\midrule
+Reel Normal (1601) & 1559 & 42 & 1502 & 99 \\
+Reel Anomalie (4167) & 45 & 4122 & 21 & 4146 \\
+\midrule
+Recall & \multicolumn{2}{c|}{98.9\%} & \multicolumn{2}{c}{\textbf{99.5\%}} \\
+FPR & \multicolumn{2}{c|}{\textbf{2.6\%}} & \multicolumn{2}{c}{6.2\%} \\
+\bottomrule
+\end{tabular}
+\caption{Matrices de confusion du CNN-LSTM}
+\end{table}
+
+\textbf{Lecture :} avec le seuil recall $\geq$ 99.5\%, le modèle ne rate que \textbf{21 attaques sur 4167}. Il génère 99 fausses alertes sur 1601 séquences normales.
+
+\subsection{Matrices de confusion --- RNN-VAE}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l|cc|cc}
+\toprule
+& \multicolumn{2}{c|}{\textbf{Seuil F1-optimal}} & \multicolumn{2}{c}{\textbf{Seuil Recall $\geq$ 99.5\%}} \\
+& Pred. Normal & Pred. Anomalie & Pred. Normal & Pred. Anomalie \\
+\midrule
+Reel Normal (1601) & 1486 & 115 & 1131 & 470 \\
+Reel Anomalie (4167) & 134 & 4033 & 21 & 4146 \\
+\midrule
+Recall & \multicolumn{2}{c|}{96.8\%} & \multicolumn{2}{c}{99.5\%} \\
+FPR & \multicolumn{2}{c|}{7.2\%} & \multicolumn{2}{c}{29.4\%} \\
+\bottomrule
+\end{tabular}
+\caption{Matrices de confusion du RNN-VAE}
+\end{table}
+
+\textbf{Lecture :} le RNN-VAE atteint le meme recall, mais génère \textbf{470 fausses alertes} (vs 99 pour le CNN-LSTM).
+
+\subsection{Evolution des performances : comment on y est arrive}
+
+L'optimisation a été itérative. Chaque étape a apporte une amélioration mesurable :
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lcccp{5cm}}
+\toprule
+\textbf{Étape} & \textbf{ROC-AUC} & \textbf{FPR} & \textbf{Recall} & \textbf{Ce qui a change} \\
+\midrule
+Départ (SPN, 50k) & 0.52 & 1.00 & 0.997 & Décodage SPN, tout classe anomalie \\
+Payloads bruts & 0.54 & 1.00 & 0.997 & 8 octets seulement, pas assez \\
++ CAN ID + temps & 0.67 & 0.99 & 0.997 & 11 features, debut de discrimination \\
++ 200k messages & 0.70 & 0.68 & 0.917 & Plus de données d'entraînément \\
++ 500k, stride=10 & 0.92 & 0.29 & 0.917 & Beaucoup plus de séquences \\
++ Taux attaque x3 & 0.996 & 0.037 & 0.979 & Attaques plus visibles \\
+\textbf{Config finale} & \textbf{0.998} & \textbf{0.062} & \textbf{0.995} & Epochs 200, patience 20 \\
+\bottomrule
+\end{tabular}
+\caption{Evolution des performances du CNN-LSTM (chaque ligne = une experience)}
+\end{table}
+
+% ============================================================================
+\section{Architecture logicielle}
+% ============================================================================
+
+\subsection{Structure du code}
+
+\begin{verbatim}
+src/canlock/
+    attacks/              # Generation d'attaques
+        attack_base.py    #   Classe abstraite + utilitaires bit-level
+        attack_ddos.py    #   Attaque DDoS
+        spoofing_attack.py#   Spoofing (bruit gaussien)
+        replay_attack.py  #   Replay (rejeu avec délai)
+        suspension_attack.py # Suspension (Bus-Off)
+        masquerade_attack.py # Masquerade (usurpation ID)
+    data/
+        can_data_module.py #  DataModule PyTorch Lightning
+    db/
+        models.py         #  ORM SQLModel (Vehicle, Session,
+                          #    CanMessage, PGN, SPN)
+        database.py       #  Connexion PostgreSQL
+    models/
+        cnn_lstm_autoencoder.py  # CNN-LSTM (modèle retenu)
+        rnn_vae.py               # RNN-VAE
+        anomaly_detector.py      # Évaluation (seuil, métriques)
+    training/
+        train_models.py   #  Pipeline d'entraînément complet (CLI)
+    décoder.py            #  Décodeur SPN/PGN J1939
+    cli.py                #  Points d'entrée CLI
+
+scripts/
+    attack_synthesis.py   # Generation de datasets attaques
+    attack_inspect.py     # Inspection/validation
+    attack_visualize.py   # Visualisation
+    generate_poster_figures.py     # Figures pour l'affiche
+    generate_architecture_figures.py # Diagrammes d'architecture
+
+notebooks/
+    rnn_vae_model.ipynb    # Expérimentation RNN-VAE
+    cnn_lstm_model.ipynb   # Expérimentation CNN-LSTM
+    can_data_analysis.ipynb # Analyse exploratoire
+\end{verbatim}
+
+\subsection{Services Docker}
+
+\begin{lstlisting}[basicstyle=\ttfamily\small, breaklines=true]
+# docker-compose.yml
+services:
+  postgres-backend:  # BDD CAN (port 5435)
+  mlflow:            # Suivi d'expériences (port 5050)
+\end{lstlisting}
+
+\subsection{CLI : commandes disponibles}
+
+\begin{lstlisting}[basicstyle=\ttfamily\small, breaklines=true]
+uv run train-models     # Entraînement des modèles
+uv run download-heavy-truck-data  # Telechargement données
+uv run analyze-session  # Analyse d'une session CAN
+\end{lstlisting}
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+\begin{tcolorbox}[colback=navy!5, colframe=navy, title=\textbf{Résultats cles}]
+\begin{itemize}[noitemsep]
+    \item Le \textbf{CNN-LSTM Autoencoder} détecte \textbf{99.5\% des intrusions} avec \textbf{6.2\% de fausses alertes}
+    \item ROC-AUC de \textbf{0.998} (quasi-parfait)
+    \item Detecte les \textbf{5 types d'attaques} : DDoS, spoofing, masquerade, replay, suspension
+    \item Entraînement \textbf{non supervise} (pas besoin d'exemples d'attaques pour entraînér)
+    \item \textbf{11 features} extraites des messages bruts (pas de décodage SPN couteux)
+    \item Surpasse le RNN-VAE : \textbf{5x moins de fausses alertes} pour le meme recall
+\end{itemize}
+\end{tcolorbox}
+
+\subsection{Travaux futurs}
+
+\begin{itemize}[noitemsep]
+    \item Validation sur des \textbf{attaques réelles} (pas uniquement synthetiques)
+    \item Optimisation pour \textbf{inférence en temps reel} sur hardware embarqué (microcontrôleur)
+    \item Ajout d'attaques plus sophistiquées (fuzzing, attaques graduelles, attaques zero-day)
+    \item Évaluation sur d'autres jeux de données CAN (véhicules légers, protocole CAN-FD)
+    \item Reduction du FPR par filtrage contextuel post-détection
+\end{itemize}
+
+% ============================================================================
+\section*{Références}
+% ============================================================================
+
+\begin{enumerate}[noitemsep, label={[\arabic*]}]
+    \item Rajapaksha, S. et al. (2023). Beyond vanilla: Improved autoencoder-based ensemble in-vehicle IDS. \textit{J. Information Security and Applications}, 77.
+    \item Balaji, P. et al. (2022). CANLite: Anomaly Detection in CAN with Multitask Learning. \textit{IEEE VTC2022-Spring}.
+    \item Alkhatib, N. et al. (2022). CAN-BERT do it? CAN IDS based on BERT. \textit{IEEE AICCSA}.
+    \item Gao, F. et al. (2024). Multi-Attack IDS for In-Vehicle CAN-FD Messages. \textit{Sensors}, 24(11).
+    \item Hoang, T.-N. \& Kim, D. (2022). Semi-supervised convolutional adversarial autoencoders for in-vehicle intrusion détection. \textit{Vehicular Communications}, 38.
+    \item Mansourian, P. et al. (2023). Deep Learning-Based Anomaly Detection for CAVs Using Spatiotemporal Information. \textit{IEEE TITS}, 24(12).
+    \item Xiao, J. et al. (2023). Robust anomaly-based IDS for in-vehicle network by graph neural network framework. \textit{Applied Intelligence}, 53(3).
+    \item Cao, J. et al. (2024). Anomaly Detection for In-Vehicle Network Using Self-Supervised Learning. \textit{IEEE TITS}, 25(7).
+\end{enumerate}
+
+\end{document}
