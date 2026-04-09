@@ -6,30 +6,33 @@
 
 ## Sommaire
 
-- [Fiche d'Identité](#fiche-didentité)
-- [Description du Projet](#description-du-projet)
-- [Objectifs & Livrables](#objectifs--livrables)
-- [Avancement](#avancement)
-- [Timeline Prévisionnelle de la Session](#timeline-prévisionnelle-de-la-session)
-  - [Session 1 - A25](#session-1---a25)
-  - [Session 2 - H26](#session-2---h26)
-- [Technologies & Compétences Visées](#technologies--compétences-visées)
-- [Pourquoi rejoindre ce projet ?](#pourquoi-rejoindre-ce-projet-)
-- [Contact & Liens Utiles](#contact--liens-utiles)
-- [Ressources](#ressources)
-  - [Revue de littérature](#revue-de-littérature)
-  - [Données](#données)
-    - [Chercher la dump de la base de données](#chercher-la-dump-de-la-base-de-données)
-    - [Si l'import via l'extension VS Code ne fonctionne pas](#si-limport-via-lextension-vs-code-ne-fonctionne-pas)
-    - [Ancienne méthode de téléchargement des données](#ancienne-méthode-de-téléchargement-des-données)
-- [Outils](#outils)
-  - [VS Code](#vs-code)
-  - [Git](#git)
-  - [UV](#uv)
-  - [click](#click)
-  - [Hydra & mlflow](#hydra--mlflow)
-- [Scripts des Attaques (Attacks Scripts)](#scripts-des-attaques-attacks-scripts)
-- [Entraînement des Modèles (Model Training)](#entraînement-des-modèles-model-training)
+- [CANlock 🔒](#canlock-)
+  - [Sommaire](#sommaire)
+  - [Fiche d'Identité](#fiche-didentité)
+  - [Description du Projet](#description-du-projet)
+  - [Objectifs \& Livrables](#objectifs--livrables)
+  - [Avancement](#avancement)
+    - [Rapports](#rapports)
+  - [Timeline Prévisionnelle de la Session](#timeline-prévisionnelle-de-la-session)
+    - [Session 1 - A25](#session-1---a25)
+    - [Session 2 - H26](#session-2---h26)
+  - [Technologies \& Compétences Visées](#technologies--compétences-visées)
+  - [Pourquoi rejoindre ce projet ?](#pourquoi-rejoindre-ce-projet-)
+  - [Contact \& Liens Utiles](#contact--liens-utiles)
+  - [Ressources](#ressources)
+    - [Revue de littérature](#revue-de-littérature)
+    - [Données](#données)
+      - [Chercher la dump de la base de données](#chercher-la-dump-de-la-base-de-données)
+      - [Si l'import via l'extension VS Code ne fonctionne pas](#si-limport-via-lextension-vs-code-ne-fonctionne-pas)
+      - [Ancienne méthode de téléchargement des données](#ancienne-méthode-de-téléchargement-des-données)
+  - [Outils](#outils)
+    - [VS Code](#vs-code)
+    - [Git](#git)
+    - [UV](#uv)
+    - [click](#click)
+    - [Hydra \& mlflow](#hydra--mlflow)
+  - [Scripts des Attaques (Attacks Scripts)](#scripts-des-attaques-attacks-scripts)
+  - [Entraînement des Modèles (Model Training)](#entraînement-des-modèles-model-training)
 
 ## Fiche d'Identité
 
@@ -69,7 +72,11 @@
 
 La première session nous a permis de nous familiariser avec le projet et de comprendre le contexte. Nous avons mis en place un pipeline de traitement des données et avons testé plusieurs approches d'analyse. Tout ce qui a été fait est disponible dans le dossier `doc/documents`.
 
-Le premier rapport est disponible [ici](doc/documents/Projet%20CANLock%20-%20Gala.pdf).
+### Rapports
+
+- La première affiche de la session A25 est disponible [ici](doc/documents/Projet%20CANLock%20-%20Gala%20-%20A25.pdf).
+- La deuxième affiche de la session H26 est disponible [ici](doc/documents/Projet%20CANLock%20-%20Gala%20-%20H26.pdf).
+- [**EN COURS DE REVIEW**] Le rapport sur les expérimentations est disponible [ici](doc/documents/Rapport%20CANLock%20-%20H26.pdf).
 
 ## Timeline Prévisionnelle de la Session
 
